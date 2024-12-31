@@ -4,13 +4,12 @@
 #include <string>
 #include <cstring>
 #include <stdexcept>
-
-//#pragma pack(1)
+#include <optional>
 
 class ObjectFatUID
 {
 public:
-	enum Media
+	enum StorageMedia
 	{
 		None = 0,
 		Volatile,
@@ -21,12 +20,13 @@ public:
 
 	struct FilePointer
 	{
-		uint32_t m_nOffset;
+		size_t m_nOffset;
 		uint32_t m_nSize;
 	};
 
 	struct NodeUID
 	{
+		uint8_t m_nType;
 		uint8_t m_nMediaType;
 		union
 		{
@@ -35,81 +35,112 @@ public:
 		} FATPOINTER;
 	};
 
+private:
 	NodeUID m_uid;
 
+public:
+	inline uint8_t getObjectType() const
+	{
+		return m_uid.m_nType;
+	}
+
+	inline uint8_t getMediaType() const
+	{
+		return m_uid.m_nMediaType;
+	}
+
+	inline uintptr_t getVolatilePointerValue() const
+	{
+		return m_uid.FATPOINTER.m_ptrVolatile;
+	}
+
+	inline size_t getPersistentPointerValue() const
+	{
+		return m_uid.FATPOINTER.m_ptrFile.m_nOffset;
+	}
+
+	inline uint32_t getPersistentObjectSize() const
+	{
+		return m_uid.FATPOINTER.m_ptrFile.m_nSize;
+	}
+
+public:
 	template <typename... Args>
-	static ObjectFatUID createAddressFromArgs(Media nMediaType, Args... args)
+	static void createAddressFromArgs(ObjectFatUID& uid, StorageMedia nMediaType, Args... args)
 	{
 		switch (nMediaType)
 		{
-		case None:
-			throw new std::logic_error("should not occur!");
-			break;
 		case Volatile:
-			return createAddressFromVolatilePointer(args...);
+			return createAddressFromVolatilePointer(uid, args...);
 			break;
 		case DRAM:
-			return createAddressFromDRAMCacheCounter(args...);
+			return createAddressFromDRAMCacheCounter(uid, args...);
 			break;
 		case PMem:
+			return createAddressFromPMemOffset(uid, args...);
 			break;
 		case File:
-			return createAddressFromFileOffset(args...);
+			return createAddressFromFileOffset(uid, args...);
 			break;
 		}
 
-		throw new std::logic_error("should not occur!");
+		std::cout << "Critical State: UID is requested for an invalid UID." << std::endl;
+		throw new std::logic_error(".....");   // TODO: critical log.
 	}
 
-	static ObjectFatUID createAddressFromFileOffset(uint32_t nPos, uint32_t nBlockSize, uint32_t nSize)
-	{
-		ObjectFatUID key;
-		key.m_uid.m_nMediaType = File;
-		key.m_uid.FATPOINTER.m_ptrFile.m_nOffset = nPos * nBlockSize;
-		key.m_uid.FATPOINTER.m_ptrFile.m_nSize= nSize;
+        static void createAddressFromPMemOffset(ObjectFatUID& uid, uint8_t nType, size_t nOffset, uint32_t nSize)
+        {
+                uid.m_uid.m_nType = nType;
+                uid.m_uid.m_nMediaType = PMem;
+                uid.m_uid.FATPOINTER.m_ptrFile.m_nOffset = nOffset;
+                uid.m_uid.FATPOINTER.m_ptrFile.m_nSize = nSize;
+        }
 
-		return key;
+	static void createAddressFromFileOffset(ObjectFatUID& uid, uint8_t nType, size_t nOffset, uint32_t nSize)
+	{
+		uid.m_uid.m_nType = nType;
+		uid.m_uid.m_nMediaType = File;
+		uid.m_uid.FATPOINTER.m_ptrFile.m_nOffset = nOffset;
+		uid.m_uid.FATPOINTER.m_ptrFile.m_nSize = nSize;
 	}
 
-	static ObjectFatUID createAddressFromVolatilePointer(uintptr_t ptr, ...)
+	static void createAddressFromVolatilePointer(ObjectFatUID& uid, uint8_t nType, uintptr_t ptr, ...)
 	{
-		ObjectFatUID key;
-		key.m_uid.m_nMediaType = Volatile;
-		key.m_uid.FATPOINTER.m_ptrVolatile = ptr;
-
-		return key;
+		uid.m_uid.m_nType = nType;
+		uid.m_uid.m_nMediaType = Volatile;
+		uid.m_uid.FATPOINTER.m_ptrVolatile = ptr;
 	}
 
-	static ObjectFatUID createAddressFromDRAMCacheCounter(uint32_t nPos, uint32_t nBlockSize, uint32_t nSize)
+	static void createAddressFromDRAMCacheCounter(ObjectFatUID& uid, uint8_t nType, size_t nOffset, uint32_t nSize)
 	{
-		ObjectFatUID key;
-		key.m_uid.m_nMediaType = DRAM;
-		key.m_uid.FATPOINTER.m_ptrFile.m_nOffset = nPos * nBlockSize;
-		key.m_uid.FATPOINTER.m_ptrFile.m_nSize = nSize;
-
-		return key;
+		uid.m_uid.m_nType = nType;
+		uid.m_uid.m_nMediaType = DRAM;
+		uid.m_uid.FATPOINTER.m_ptrFile.m_nOffset = nOffset;
+		uid.m_uid.FATPOINTER.m_ptrFile.m_nSize = nSize;
 	}
 
-	bool operator==(const ObjectFatUID& rhs) const 
+	bool operator==(const ObjectFatUID& rhs) const
 	{
-        if (m_uid.m_nMediaType != rhs.m_uid.m_nMediaType)
+		if (m_uid.m_nType != rhs.m_uid.m_nType
+			|| m_uid.m_nMediaType != rhs.m_uid.m_nMediaType)
 		{
-            return false;
+			return false;
 		}
 
-		switch (m_uid.m_nMediaType) 
+		switch (m_uid.m_nMediaType)
 		{
-			case Volatile:
-				return m_uid.FATPOINTER.m_ptrVolatile == rhs.m_uid.FATPOINTER.m_ptrVolatile;
-			case DRAM:
-				return m_uid.FATPOINTER.m_ptrVolatile == rhs.m_uid.FATPOINTER.m_ptrVolatile;
-			case PMem:
-				return false;
-			case File:
-				return m_uid.FATPOINTER.m_ptrFile.m_nOffset == rhs.m_uid.FATPOINTER.m_ptrFile.m_nOffset &&
-					m_uid.FATPOINTER.m_ptrFile.m_nSize == rhs.m_uid.FATPOINTER.m_ptrFile.m_nSize;
-			default:
-				return std::memcmp(this, &rhs.m_uid, sizeof(NodeUID)) == 0;
+		case Volatile:
+			return m_uid.FATPOINTER.m_ptrVolatile == rhs.m_uid.FATPOINTER.m_ptrVolatile;
+		case DRAM:
+			return m_uid.FATPOINTER.m_ptrVolatile == rhs.m_uid.FATPOINTER.m_ptrVolatile;
+		case PMem:
+                        return m_uid.FATPOINTER.m_ptrFile.m_nOffset == rhs.m_uid.FATPOINTER.m_ptrFile.m_nOffset &&
+                                m_uid.FATPOINTER.m_ptrFile.m_nSize == rhs.m_uid.FATPOINTER.m_ptrFile.m_nSize;
+		case File:
+			return m_uid.FATPOINTER.m_ptrFile.m_nOffset == rhs.m_uid.FATPOINTER.m_ptrFile.m_nOffset &&
+				m_uid.FATPOINTER.m_ptrFile.m_nSize == rhs.m_uid.FATPOINTER.m_ptrFile.m_nSize;
+		default:
+			return std::memcmp(this, &rhs.m_uid, sizeof(NodeUID)) == 0;
 		}
 
 		//Following is comiler specific!
@@ -118,85 +149,91 @@ public:
 
 	bool operator <(const ObjectFatUID& rhs) const
 	{
-        if (m_uid.m_nMediaType < rhs.m_uid.m_nMediaType)
-            return true;
-        else if (m_uid.m_nMediaType > rhs.m_uid.m_nMediaType)
-            return false;
-
-		switch (m_uid.m_nMediaType) 
-		{
-			case Volatile:
-				return m_uid.FATPOINTER.m_ptrVolatile < rhs.m_uid.FATPOINTER.m_ptrVolatile;
-
-			case DRAM:
-				return m_uid.FATPOINTER.m_ptrVolatile < rhs.m_uid.FATPOINTER.m_ptrVolatile;
-
-			case File:
-				if (m_uid.FATPOINTER.m_ptrFile.m_nOffset < rhs.m_uid.FATPOINTER.m_ptrFile.m_nOffset)
-					return true;
-				else if (m_uid.FATPOINTER.m_ptrFile.m_nOffset > rhs.m_uid.FATPOINTER.m_ptrFile.m_nOffset)
-					return false;
-
-				return m_uid.FATPOINTER.m_ptrFile.m_nSize < rhs.m_uid.FATPOINTER.m_ptrFile.m_nSize;
-
-			default:
-				return std::memcmp(this, &rhs, sizeof(NodeUID)) < 0;
-		}
-
-		//Following is comiler specific!
-		//return memcmp(&m_uid, &rhs.m_uid, sizeof(NodeUID)) < 0;
+		return std::memcmp(this, &rhs, sizeof(NodeUID)) < 0;
 	}
 
-	struct HashFunction
+	size_t gethash() const
 	{
-	public:
-		size_t operator()(const ObjectFatUID& rhs) const
+		size_t hashValue = 0;
+		hashValue ^= std::hash<uint8_t>()(m_uid.m_nType);
+		hashValue ^= std::hash<uint8_t>()(m_uid.m_nMediaType);
+
+		switch (m_uid.m_nMediaType)
 		{
-			return std::hash<uint8_t>()(rhs.m_uid.m_nMediaType)
-				^ std::hash<uintptr_t>()(rhs.m_uid.FATPOINTER.m_ptrVolatile)
-				^ std::hash<uint32_t>()(rhs.m_uid.FATPOINTER.m_ptrFile.m_nOffset)
-				^ std::hash<uint32_t>()(rhs.m_uid.FATPOINTER.m_ptrFile.m_nSize);
-		}
-	};
-
-	struct EqualFunction
-	{
-	public:
-		bool operator()(const ObjectFatUID& lhs, const ObjectFatUID& rhs) const 
-		{
-			if (lhs.m_uid.m_nMediaType < rhs.m_uid.m_nMediaType)
-				return true;
-			else if (lhs.m_uid.m_nMediaType > rhs.m_uid.m_nMediaType)
-				return false;
-
-			switch (lhs.m_uid.m_nMediaType) {
-				case Volatile:
-					return lhs.m_uid.FATPOINTER.m_ptrVolatile < rhs.m_uid.FATPOINTER.m_ptrVolatile;
-
-				case DRAM:
-					return lhs.m_uid.FATPOINTER.m_ptrVolatile < rhs.m_uid.FATPOINTER.m_ptrVolatile;
-
-				case File:
-					if (lhs.m_uid.FATPOINTER.m_ptrFile.m_nOffset < rhs.m_uid.FATPOINTER.m_ptrFile.m_nOffset)
-						return true;
-					else if (lhs.m_uid.FATPOINTER.m_ptrFile.m_nOffset > rhs.m_uid.FATPOINTER.m_ptrFile.m_nOffset)
-						return false;
-
-					return lhs.m_uid.FATPOINTER.m_ptrFile.m_nSize < rhs.m_uid.FATPOINTER.m_ptrFile.m_nSize;
-
-				default:
-					return std::memcmp(&lhs, &rhs, sizeof(NodeUID)) < 0;
+		case ObjectFatUID::StorageMedia::None:
+			break;
+		case ObjectFatUID::StorageMedia::Volatile:
+			hashValue ^= std::hash<uintptr_t>()(m_uid.FATPOINTER.m_ptrVolatile);
+			break;
+		case ObjectFatUID::StorageMedia::DRAM:
+			hashValue ^= std::hash<uintptr_t>()(m_uid.FATPOINTER.m_ptrVolatile);
+			break;
+                case ObjectFatUID::StorageMedia::PMem:
+			{
+                        size_t offsetHash = std::hash<size_t>()(m_uid.FATPOINTER.m_ptrFile.m_nOffset);
+                        size_t sizeHash = std::hash<uint32_t>()(m_uid.FATPOINTER.m_ptrFile.m_nSize);
+                        hashValue ^= offsetHash ^ (sizeHash + 0x9e3779b9 + (offsetHash << 6) + (offsetHash >> 2));
 			}
-
-			//Following is comiler specific!
-			//return memcmp(&lhs.m_uid, &rhs.m_uid, sizeof(NodeUID)) == 0;
+                        break;
+		case ObjectFatUID::StorageMedia::File:
+			{
+			size_t offsetHash = std::hash<size_t>()(m_uid.FATPOINTER.m_ptrFile.m_nOffset);
+			size_t sizeHash = std::hash<uint32_t>()(m_uid.FATPOINTER.m_ptrFile.m_nSize);
+			hashValue ^= offsetHash ^ (sizeHash + 0x9e3779b9 + (offsetHash << 6) + (offsetHash >> 2));
+			}
+			break;
 		}
-	};
 
+		return hashValue;
+	}
 
 public:
+	~ObjectFatUID()
+	{
+		m_uid.m_nType = 0;
+		m_uid.m_nMediaType = 0;
+		m_uid.FATPOINTER.m_ptrVolatile = 0;
+		m_uid.FATPOINTER.m_ptrFile.m_nOffset = 0;
+		m_uid.FATPOINTER.m_ptrFile.m_nSize = 0;
+	}
+
 	ObjectFatUID()
 	{
+		m_uid.m_nType = 0;
+		m_uid.m_nMediaType = 0;
+		m_uid.FATPOINTER.m_ptrVolatile = 0;
+		m_uid.FATPOINTER.m_ptrFile.m_nOffset = 0;
+		m_uid.FATPOINTER.m_ptrFile.m_nSize = 0;
+	}
+
+	ObjectFatUID(const ObjectFatUID& other)
+	{
+		m_uid.m_nType = other.m_uid.m_nType;
+		m_uid.m_nMediaType = other.m_uid.m_nMediaType;
+		m_uid.FATPOINTER.m_ptrVolatile = other.m_uid.FATPOINTER.m_ptrVolatile;
+		m_uid.FATPOINTER.m_ptrFile.m_nOffset = other.m_uid.FATPOINTER.m_ptrFile.m_nOffset;
+		m_uid.FATPOINTER.m_ptrFile.m_nSize = other.m_uid.FATPOINTER.m_ptrFile.m_nSize;
+	}
+
+	ObjectFatUID& operator=(const ObjectFatUID& other)
+	{
+		m_uid = other.m_uid;
+		return *this;
+	}
+
+	ObjectFatUID(ObjectFatUID&& other) noexcept
+	{
+		m_uid = other.m_uid;
+	}
+
+	ObjectFatUID& operator=(ObjectFatUID&& other) noexcept {
+		
+		if (this == &other) 
+			return *this;
+		
+		m_uid = std::move(other.m_uid);
+
+		return *this;
 	}
 
 	std::string toString() const
@@ -216,6 +253,9 @@ public:
 			break;
 		case PMem:
 			szData.append("P:");
+                        szData.append(std::to_string(m_uid.FATPOINTER.m_ptrFile.m_nOffset));
+                        szData.append(":");
+                        szData.append(std::to_string(m_uid.FATPOINTER.m_ptrFile.m_nSize));
 			break;
 		case File:
 			szData.append("F:");
@@ -233,28 +273,47 @@ namespace std {
 	struct hash<ObjectFatUID> {
 		size_t operator()(const ObjectFatUID& rhs) const
 		{
-			size_t hashValue = 0;
-			hashValue ^= std::hash<uint8_t>()(rhs.m_uid.m_nMediaType);
+			return rhs.gethash();
+		}
+	};
 
-			switch (rhs.m_uid.m_nMediaType)
-			{
-			case ObjectFatUID::Media::None:
-				break;
-			case ObjectFatUID::Media::Volatile:
-				hashValue ^= std::hash<uintptr_t>()(rhs.m_uid.FATPOINTER.m_ptrVolatile);
-				break;
-			case ObjectFatUID::Media::DRAM:
-				hashValue ^= std::hash<uintptr_t>()(rhs.m_uid.FATPOINTER.m_ptrVolatile);
-				break;
-			case ObjectFatUID::Media::File:
-				size_t offsetHash = std::hash<uint32_t>()(rhs.m_uid.FATPOINTER.m_ptrFile.m_nOffset);
-				size_t sizeHash = std::hash<uint32_t>()(rhs.m_uid.FATPOINTER.m_ptrFile.m_nSize);
-				hashValue ^= offsetHash ^ (sizeHash + 0x9e3779b9 + (offsetHash << 6) + (offsetHash >> 2));
-				break;
-			}
+	template <>
+	struct hash<const ObjectFatUID*> {
+		size_t operator()(const ObjectFatUID* rhs) const
+		{
+			return rhs->gethash();
+		}
+	};
 
-			return hashValue;
+	template <>
+	struct hash<const std::shared_ptr<ObjectFatUID>> {
+		size_t operator()(const std::shared_ptr<ObjectFatUID> rhs) const
+		{
+			return rhs->gethash();
+		}
+	};
+
+	template <>
+	struct equal_to<ObjectFatUID> {
+		bool operator()(const ObjectFatUID& lhs, const ObjectFatUID& rhs) const
+		{
+			return lhs == rhs;
+		}
+	};
+
+	template <>
+	struct equal_to<const ObjectFatUID*> {
+		bool operator()(const ObjectFatUID* lhs, const ObjectFatUID* rhs) const
+		{
+			return *lhs == *rhs;
+		}
+	};
+
+	template <>
+	struct equal_to<const std::shared_ptr<ObjectFatUID>> {
+		bool operator()(const std::shared_ptr<ObjectFatUID> lhs, const std::shared_ptr<ObjectFatUID> rhs) const
+		{
+			return *lhs == *rhs;
 		}
 	};
 }
-

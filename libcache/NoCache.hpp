@@ -10,15 +10,13 @@
 #include "CacheErrorCodes.h"
 #include "IFlushCallback.h"
 
-//template<typename KeyType, template <typename...> typename ValueType, typename... ValueCoreTypes>
-template<typename KeyType, typename... ValueCoreTypes>
+template<typename KeyType, template <typename...> typename ValueType, typename... ValueCoreTypes>
 class NoCache
 {
 public:
 	typedef KeyType ObjectUIDType;
-	typedef void ObjectType;
-	typedef void* ObjectTypePtr;
-	typedef std::tuple<ValueCoreTypes...> ObjectCoreTypes;
+	typedef ValueType<ValueCoreTypes...> ObjectType;
+	typedef ValueType<ValueCoreTypes...>* ObjectTypePtr;
 
 public:
 	~NoCache()
@@ -37,7 +35,7 @@ public:
 
 	CacheErrorCode remove(ObjectUIDType objKey)
 	{
-		ObjectTypePtr ptrValue = reinterpret_cast<ObjectTypePtr>(objKey.m_ptrVolatile);
+		ObjectTypePtr ptrValue = reinterpret_cast<ObjectTypePtr>(objKey);
 		delete ptrValue;
 
 		return CacheErrorCode::KeyDoesNotExist;
@@ -45,37 +43,63 @@ public:
 
 	CacheErrorCode getObject(ObjectUIDType objKey, ObjectTypePtr& ptrObject)
 	{
-		ptrObject = reinterpret_cast<ObjectTypePtr>(objKey.m_ptrVolatile);
+		ptrObject = reinterpret_cast<ObjectTypePtr>(objKey);
 		return CacheErrorCode::Success;
+	}
+
+	template <typename Type>
+	CacheErrorCode getObjectOfType(ObjectUIDType objKey, Type& ptrObject, ObjectTypePtr& ptrValue)
+	{
+		ptrValue = reinterpret_cast<ObjectTypePtr>(objKey);
+
+		if (std::holds_alternative<Type>(ptrValue->getInnerData()))
+		{
+			ptrObject = std::get<Type>(ptrValue->getInnerData());
+			return CacheErrorCode::Success;
+		}
+
+		return CacheErrorCode::Error;
 	}
 
 	template <typename Type>
 	CacheErrorCode getObjectOfType(ObjectUIDType objKey, Type& ptrObject)
 	{
-		ptrObject = reinterpret_cast<Type*>(objKey.m_ptrVolatile);
+		ObjectTypePtr ptrValue = reinterpret_cast<ObjectTypePtr>(objKey);
+
+		if (std::holds_alternative<Type>(ptrValue->getInnerData()))
+		{
+			ptrObject = std::get<Type>(ptrValue->getInnerData());
+			return CacheErrorCode::Success;
+		}
 
 		return CacheErrorCode::Error;
 	}
 
 	template<class Type, typename... ArgsType>
-	CacheErrorCode createObjectOfType(std::optional<ObjectUIDType>& key, ArgsType... args)
+	CacheErrorCode createObjectOfType(std::optional<ObjectUIDType>& key, const ArgsType... args)
 	{
-		//ObjectTypePtr ptrValue = new std::variant<ValueCoreTypes...>(std::make_shared<Type>(args...));
-		
-		ObjectTypePtr ptrValue = new Type(args...);
+		ObjectTypePtr ptrObject = new ObjectType(std::make_shared<Type>(args...));
 
-		key = ObjectUIDType::createAddressFromVolatilePointer(Type::UID, reinterpret_cast<uintptr_t>(ptrValue));
+		key = reinterpret_cast<ObjectUIDType>(ptrObject);
 		return CacheErrorCode::Success;
 	}
 
-	void getCacheState(size_t& lru, size_t& map)
+	template<class Type, typename... ArgsType>
+	CacheErrorCode createObjectOfType(std::optional<ObjectUIDType>& key, ObjectTypePtr& ptrObject, const ArgsType... args)
 	{
-		lru = 1;
-		map = 1;
+		ptrObject = new ObjectType(std::make_shared<Type>(args...));
+
+		key = reinterpret_cast<ObjectUIDType>(ptrObject);
+		return CacheErrorCode::Success;
 	}
 
-	CacheErrorCode reorder(std::vector<std::pair<ObjectUIDType, ObjectTypePtr>>& vt, bool ensure = true)
+	template<class Type, typename... ArgsType>
+	CacheErrorCode createObjectOfType(std::optional<ObjectUIDType>& key, std::shared_ptr<Type>& ptrCoreObject, const ArgsType... args)
 	{
+		ptrCoreObject = std::make_shared<Type>(args...);
+		ObjectTypePtr ptrObject = new ObjectType(ptrCoreObject);
+
+		key = reinterpret_cast<ObjectUIDType>(ptrObject);
 		return CacheErrorCode::Success;
 	}
 };
