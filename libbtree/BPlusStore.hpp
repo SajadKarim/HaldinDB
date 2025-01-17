@@ -214,7 +214,7 @@ public:
                         if ((*itCurrent).first == uidCurrentNode)
                         {
                             bTest = true;
-                            vtAccessedNodes.insert(itCurrent + 1, std::make_pair(*uidRHSChildNode, nullptr));
+                            vtAccessedNodes.insert(itCurrent + 1, std::make_pair(*uidRHSChildNode, ptrRHSChildNode));
                             break;
                         }
                     }
@@ -285,7 +285,7 @@ public:
                     if ((*itCurrent).first == uidCurrentNode)
                     {
                         test = true;
-                        vtAccessedNodes.insert(itCurrent + 1, std::make_pair(*uidRHSChildNode, nullptr));
+                        vtAccessedNodes.insert(itCurrent + 1, std::make_pair(*uidRHSChildNode, ptrRHSChildNode));
                         break;
                     }
                 }
@@ -322,7 +322,7 @@ public:
                 if ((*itCurrent).first == uidCurrentNode)
                 {
                     bTest = true;
-                    vtAccessedNodes.insert(itCurrent + 1, std::make_pair(*uidRHSChildNode, nullptr));
+                    vtAccessedNodes.insert(itCurrent + 1, std::make_pair(*uidRHSChildNode, ptrRHSChildNode));
                     break;
                 }
             }

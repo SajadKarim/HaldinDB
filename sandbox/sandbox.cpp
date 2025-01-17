@@ -1028,15 +1028,18 @@ void cache_team_test()
     //typedef BPlusStore<ICallback, KeyType, ValueType, LRUCache<ICallback, FileStorage<ICallback, ObjectUIDType, LRUCacheObject, TypeMarshaller, DataNodeType, IndexNodeType>>> BPlusStoreType;
     //BPlusStoreType ptrTree(24, 1024, 512, 10ULL * 1024 * 1024 * 1024, FILE_STORAGE_PATH);
 
+    //typedef BPlusStore<ICallback, KeyType, ValueType, LRUCache<ICallback, VolatileStorage<ICallback, ObjectUIDType, LRUCacheObject, TypeMarshaller, DataNodeType, IndexNodeType>>> BPlusStoreType;
+    //BPlusStoreType ptrTree(3, 10, 32, 1ULL * 1024 * 1024 * 1024);
+     
     typedef BPlusStore<ICallback, KeyType, ValueType, SSARCCache<ICallback, VolatileStorage<ICallback, ObjectUIDType, SSARCCacheObject, TypeMarshaller, DataNodeType, IndexNodeType>>> BPlusStoreType;
-    BPlusStoreType ptrTree(24, 1024, 1024, 10ULL * 1024 * 1024 * 1024);
+    BPlusStoreType ptrTree(3, 10, 32, 1ULL * 1024 * 1024 * 1024);
 
     //typedef BPlusStore<ICallback, KeyType, ValueType, LRUCache<ICallback, PMemStorage<ICallback, ObjectUIDType, LRUCacheObject, TypeMarshaller, DataNodeType, IndexNodeType>>> BPlusStoreType;
     //BPlusStoreType ptrTree(48, 4096 ,512 , 10ULL * 1024 * 1024 * 1024, FILE_STORAGE_PATH);
 
     ptrTree.init<DataNodeType>();
 
-    size_t nTotalEntries = 500000;
+    size_t nTotalEntries = 50000;
     std::vector<int> random_numbers(nTotalEntries);//50000000);
     std::iota(random_numbers.begin(), random_numbers.end(), 1); // Fill vector with 1 to 5,000,000
     std::random_device rd; // Obtain a random number from hardware
@@ -1045,7 +1048,7 @@ void cache_team_test()
 
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
-    for (size_t nCntr = 0; nCntr < nTotalEntries; nCntr = nCntr++)
+    for (size_t nCntr = 0; nCntr < nTotalEntries; nCntr++)
     {
         ptrTree.insert(random_numbers[nCntr], random_numbers[nCntr]);
     }
@@ -1059,7 +1062,7 @@ void cache_team_test()
 
     begin = std::chrono::steady_clock::now();
 
-    ptrTree.flush();
+    //ptrTree.flush();
 
     end = std::chrono::steady_clock::now();
     std::cout
@@ -1074,8 +1077,8 @@ void cache_team_test()
 
 int main(int argc, char* argv[])
 {
-    cache_team_test();
-    return 0;
+    //cache_team_test();
+    //return 0;
 
     //fptree_bm();
     quick_test();
