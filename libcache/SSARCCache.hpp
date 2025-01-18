@@ -99,7 +99,7 @@ public:
 #endif //__CONCURRENT__
 
 		//presistCurrentCacheState();
-		flushAllItemsToStorage();
+		////flushAllItemsToStorage();
 
 		m_ptrHeadOTA.reset();
 		m_ptrTailOTA.reset();
@@ -661,6 +661,22 @@ public:
 			ptrItem = ptrItem->m_ptrNext;
 		}
 
+		ptrItem = m_ptrHeadMTA;
+
+		while (ptrItem != nullptr)
+		{
+			nObjectsLinkedList++;
+			ptrItem = ptrItem->m_ptrNext;
+		}
+
+		ptrItem = m_ptrHeadPF;
+
+		while (ptrItem != nullptr)
+		{
+			nObjectsLinkedList++;
+			ptrItem = ptrItem->m_ptrNext;
+		}
+
 		nObjectsInMap = m_mpObjects.size();
 	}
 
@@ -817,12 +833,12 @@ private:
 
 	inline void moveToFront_(std::shared_ptr<Item> ptrItem)
 	{
-		if (ptrItem->m_qtLinkedQueue == QueueType::PF)
-		{
-			std::cout << "Critical State: Can't proceed with the flushItemsToStorage operations as an object is in use." << std::endl;
-			throw new std::logic_error(".....");   // TODO: critical log.
+		//if (ptrItem->m_qtLinkedQueue == QueueType::PF)
+		//{
+		//	std::cout << "Critical State: Can't proceed with the flushItemsToStorage operations as an object is in use." << std::endl;
+		//	throw new std::logic_error(".....");   // TODO: critical log.
 
-		}
+		//}
 
 		if (ptrItem->m_qtLinkedQueue == QueueType::OTA)
 		{
@@ -885,6 +901,37 @@ private:
 				m_ptrHeadMTA->m_ptrPrev = ptrItem;
 			}
 			m_ptrHeadMTA = ptrItem;
+		}
+		else if (ptrItem->m_qtLinkedQueue == QueueType::PF)
+		{
+			if (ptrItem == m_ptrHeadPF)
+			{
+				return;
+			}
+
+			if (ptrItem->m_ptrPrev)
+			{
+				ptrItem->m_ptrPrev->m_ptrNext = ptrItem->m_ptrNext;
+			}
+
+			if (ptrItem->m_ptrNext)
+			{
+				ptrItem->m_ptrNext->m_ptrPrev = ptrItem->m_ptrPrev;
+			}
+
+			if (ptrItem == m_ptrTailPF)
+			{
+				m_ptrTailPF = ptrItem->m_ptrPrev;
+			}
+
+			ptrItem->m_ptrPrev = nullptr;
+			ptrItem->m_ptrNext = m_ptrHeadPF;
+
+			if (m_ptrHeadPF)
+			{
+				m_ptrHeadPF->m_ptrPrev = ptrItem;
+			}
+			m_ptrHeadPF = ptrItem;
 		}
 	}
 
@@ -999,29 +1046,88 @@ private:
 
 	inline void removeFromLRU(std::shared_ptr<Item> ptrItem)
 	{
-		if (ptrItem->m_ptrPrev != nullptr)
+		if (ptrItem->m_qtLinkedQueue == QueueType::OTA)
 		{
-			ptrItem->m_ptrPrev->m_ptrNext = ptrItem->m_ptrNext;
-		}
-		else
-		{
-			m_ptrHeadOTA = ptrItem->m_ptrNext;
-			if (m_ptrHeadOTA != nullptr)
+			if (ptrItem->m_ptrPrev != nullptr)
 			{
-				m_ptrHeadOTA->m_ptrPrev = nullptr;
+				ptrItem->m_ptrPrev->m_ptrNext = ptrItem->m_ptrNext;
+			}
+			else
+			{
+				m_ptrHeadOTA = ptrItem->m_ptrNext;
+				if (m_ptrHeadOTA != nullptr)
+				{
+					m_ptrHeadOTA->m_ptrPrev = nullptr;
+				}
+			}
+
+			if (ptrItem->m_ptrNext != nullptr)
+			{
+				ptrItem->m_ptrNext->m_ptrPrev = ptrItem->m_ptrPrev;
+			}
+			else
+			{
+				m_ptrTailOTA = ptrItem->m_ptrPrev;
+				if (m_ptrTailOTA != nullptr)
+				{
+					m_ptrTailOTA->m_ptrNext = nullptr;
+				}
 			}
 		}
-
-		if (ptrItem->m_ptrNext != nullptr)
+		else if (ptrItem->m_qtLinkedQueue == QueueType::MTA)
 		{
-			ptrItem->m_ptrNext->m_ptrPrev = ptrItem->m_ptrPrev;
-		}
-		else
-		{
-			m_ptrTailOTA = ptrItem->m_ptrPrev;
-			if (m_ptrTailOTA != nullptr)
+			if (ptrItem->m_ptrPrev != nullptr)
 			{
-				m_ptrTailOTA->m_ptrNext = nullptr;
+				ptrItem->m_ptrPrev->m_ptrNext = ptrItem->m_ptrNext;
+			}
+			else
+			{
+				m_ptrHeadMTA = ptrItem->m_ptrNext;
+				if (m_ptrHeadMTA != nullptr)
+				{
+					m_ptrHeadMTA->m_ptrPrev = nullptr;
+				}
+			}
+
+			if (ptrItem->m_ptrNext != nullptr)
+			{
+				ptrItem->m_ptrNext->m_ptrPrev = ptrItem->m_ptrPrev;
+			}
+			else
+			{
+				m_ptrTailMTA = ptrItem->m_ptrPrev;
+				if (m_ptrTailMTA != nullptr)
+				{
+					m_ptrTailMTA->m_ptrNext = nullptr;
+				}
+			}
+		}
+		else if (ptrItem->m_qtLinkedQueue == QueueType::PF)
+		{
+			if (ptrItem->m_ptrPrev != nullptr)
+			{
+				ptrItem->m_ptrPrev->m_ptrNext = ptrItem->m_ptrNext;
+			}
+			else
+			{
+				m_ptrHeadPF = ptrItem->m_ptrNext;
+				if (m_ptrHeadPF != nullptr)
+				{
+					m_ptrHeadPF->m_ptrPrev = nullptr;
+				}
+			}
+
+			if (ptrItem->m_ptrNext != nullptr)
+			{
+				ptrItem->m_ptrNext->m_ptrPrev = ptrItem->m_ptrPrev;
+			}
+			else
+			{
+				m_ptrTailPF = ptrItem->m_ptrPrev;
+				if (m_ptrTailPF != nullptr)
+				{
+					m_ptrTailPF->m_ptrNext = nullptr;
+				}
 			}
 		}
 	}
