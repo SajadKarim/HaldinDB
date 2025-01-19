@@ -557,7 +557,7 @@ void test_for_ints()
             BPlusStoreType ptrTree(nDegree, 100, 1024, 10ULL * 1024 * 1024 * 1024);
             ptrTree.template init<DataNodeType>();
 
-            int_test<BPlusStoreType>(&ptrTree, 10000);
+            int_test<BPlusStoreType>(&ptrTree, 100000);
         }
         {
             typedef int KeyType;
@@ -574,7 +574,7 @@ void test_for_ints()
             BPlusStoreType ptrTree(nDegree, 100, 1024, 10ULL * 1024* 1024 * 1024, FILE_STORAGE_PATH);
             ptrTree.init<DataNodeType>();
 
-            int_test<BPlusStoreType>(&ptrTree, 10000);
+            int_test<BPlusStoreType>(&ptrTree, 100000);
         }
         {
             typedef int KeyType;
@@ -609,7 +609,7 @@ void test_for_ints()
             BPlusStoreType ptrTree(nDegree, 100, 1024, 10ULL * 1024 * 1024 * 1024);
             ptrTree.template init<DataNodeType>();
 
-            int_test<BPlusStoreType>(&ptrTree, 10000);
+            int_test<BPlusStoreType>(&ptrTree, 100000);
         }
         {
             typedef int KeyType;
@@ -626,7 +626,7 @@ void test_for_ints()
             BPlusStoreType ptrTree(nDegree, 100, 1024, 10ULL * 1024 * 1024 * 1024, FILE_STORAGE_PATH);
             ptrTree.init<DataNodeType>();
 
-            int_test<BPlusStoreType>(&ptrTree, 10000);
+            int_test<BPlusStoreType>(&ptrTree, 100000);
         }
         {
             typedef int KeyType;
@@ -1110,7 +1110,7 @@ void cache_team_test()
 
 int main(int argc, char* argv[])
 {
-    //cache_team_test();
+    cache_team_test();
     //return 0;
 
     //fptree_bm();
