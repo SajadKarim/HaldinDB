@@ -829,25 +829,27 @@ void quick_test()
 template <typename BPlusStoreType>
 void fptree_test(BPlusStoreType* ptrTree, size_t nMaxNumber)
 {
-    std::ifstream file("/home/skarim/Reproducibility/benchmarks/microbenchmarks/values_int.dat"); 
-    std::vector<int64_t> random_numbers;
-    int64_t number; 
+    //std::ifstream file("/home/skarim/Reproducibility/benchmarks/microbenchmarks/values_int.dat"); 
+    //std::vector<int64_t> random_numbers;
+    //int64_t number; 
+    //std::string line;
     
-    while (file >> number) 
-    { 
-        random_numbers.push_back(number);
-    } 
+    //while (std::getline(file, line)) 
+    //{ 
+//	    number = std::stoull(line);
+  //      random_numbers.push_back(number);
+    //} 
     
-    for (const auto &num : random_numbers)
+   /* for (const auto &num : random_numbers)
     { 
         std::cout << num << std::endl; 
-    }
+    }*/
+//	std::cout << "---" <<  random_numbers.size() << std::endl;
 
-
-    //std::vector<int> random_numbers(nMaxNumber);//50000000);
-    //std::iota(random_numbers.begin(), random_numbers.end(), 1); // Fill vector with 1 to 5,000,000    
-    //std::random_device rd; // Obtain a random number from hardware
-    //std::mt19937 eng(rd()); // Seed the generator
+    std::vector<int> random_numbers(nMaxNumber);//50000000);
+    std::iota(random_numbers.begin(), random_numbers.end(), 1); // Fill vector with 1 to 5,000,000    
+    std::random_device rd; // Obtain a random number from hardware
+    std::mt19937 eng(rd()); // Seed the generator
     //std::shuffle(random_numbers.begin(), random_numbers.end(), eng);
 
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
@@ -863,12 +865,12 @@ void fptree_test(BPlusStoreType* ptrTree, size_t nMaxNumber)
         << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "us"
         << ", " << std::chrono::duration_cast<std::chrono::nanoseconds> (end - begin).count() << "ns]"
         << std::endl;
- 
+ return;
     std::this_thread::sleep_for(std::chrono::seconds(10));
 
     begin = std::chrono::steady_clock::now();
 
-    ptrTree->flush();
+    //ptrTree->flush();
 
     end = std::chrono::steady_clock::now();
     std::cout
@@ -883,7 +885,7 @@ void fptree_test(BPlusStoreType* ptrTree, size_t nMaxNumber)
 
     for (size_t nCntr = 0; nCntr < nMaxNumber; nCntr++)
     {
-        int64_t nValue = 0;
+        int32_t nValue = 0;
         ErrorCode ec = ptrTree->search(random_numbers[nCntr], nValue);
 
         assert(nValue == random_numbers[nCntr]);
@@ -904,7 +906,7 @@ ptrTree->flush();
 
     for (size_t nCntr = 0; nCntr < nMaxNumber; nCntr++)
     {
-        int64_t nValue = 0;
+        int32_t nValue = 0;
         ErrorCode ec = ptrTree->remove(random_numbers[nCntr]);
 
         assert(nValue == random_numbers[nCntr]);
@@ -921,8 +923,8 @@ ptrTree->flush();
 void fptree_bm()
 {
 #ifdef __TREE_WITH_CACHE__
-    typedef int64_t KeyType;
-    typedef int64_t ValueType;
+    typedef int32_t KeyType;
+    typedef int32_t ValueType;
 
     typedef ObjectFatUID ObjectUIDType;
 
@@ -947,7 +949,7 @@ void fptree_bm()
     {
         size_t nMaxNumber = 5000000;
 	
-        for (size_t nDegree = 2000; nDegree < 4000; nDegree = nDegree + 100)
+        for (size_t nDegree = 512; nDegree < 4000; nDegree = nDegree + 10)
         {
 		//break;
             size_t nInternalNodeSize = (nDegree - 1) * sizeof(ValueType) + nDegree * sizeof(ObjectUIDType) + sizeof(int*);
