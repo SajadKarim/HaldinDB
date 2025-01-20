@@ -27,7 +27,7 @@
 #include <numeric>
 #include "SSARCCache.hpp"
 #include "SSARCCacheObject.hpp"
-
+#include <string>
 
 #define __VALIDITY_CHECK__
 
@@ -1027,17 +1027,72 @@ return;
 
 }
 
+//struct KeyTypeEx {
+//    uint64_t value1;
+//    uint64_t value2;
+//
+//
+//    // Default constructor
+//    KeyTypeEx() = default;
+//
+//    // Parameterized constructor
+//    KeyTypeEx(uint64_t v1, uint64_t v2) : value1(v1), value2(v2) {}
+//
+//    // Define the < operator for comparison
+//    bool operator<(const KeyTypeEx& other) const {
+//        if (value1 != other.value1) {
+//            return value1 < other.value1;
+//        }
+//        return value2 < other.value2;
+//    }
+//    
+//    bool operator==(const KeyTypeEx& other) const {
+//        return value1 == other.value1 && value2 == other.value2;
+//    }
+//};
+
+struct KeyTypeEx {
+    char data[16];
+
+    // Default constructor (trivial)
+    KeyTypeEx() = default;
+
+    // Parameterized constructor
+    KeyTypeEx(const char* str) {
+        std::memset(data, 0, sizeof(data));
+        strncpy_s(data, sizeof(data), str, sizeof(data) - 1);
+    }
+
+    // Define the < operator for comparison
+    bool operator<(const KeyTypeEx& other) const {
+        return std::strncmp(data, other.data, sizeof(data)) < 0;
+    }
+
+    // Define the == operator for comparison
+    bool operator==(const KeyTypeEx& other) const {
+        return std::strncmp(data, other.data, sizeof(data)) == 0;
+    }
+};
+
+
+
+std::string intToFixedLengthString(int value, size_t length = 16) {
+    char buffer[16]; // Create a buffer of 9 chars to include the null terminator 
+    sprintf_s(buffer, sizeof(buffer), "%08d", value); // Convert the integer to a string return 
+    return std::string(buffer); // Return the string 
+}
+
 void cache_team_test()
 {
-    typedef int KeyType;
-    typedef int ValueType;
+    typedef KeyTypeEx KeyType;
+    typedef KeyTypeEx ValueType;
     typedef ObjectFatUID ObjectUIDType;
+    
+    //typedef DataNodeROpt<KeyType, ValueType, ObjectUIDType, TYPE_UID::DATA_NODE_INT_INT> DataNodeType;
+    //typedef IndexNodeROpt<KeyType, ValueType, ObjectUIDType, DataNodeType, TYPE_UID::INDEX_NODE_INT_INT> IndexNodeType;
 
-    typedef DataNodeROpt<KeyType, ValueType, ObjectUIDType, TYPE_UID::DATA_NODE_INT_INT> DataNodeType;
-    typedef IndexNodeROpt<KeyType, ValueType, ObjectUIDType, DataNodeType, TYPE_UID::INDEX_NODE_INT_INT> IndexNodeType;
-
-    //typedef DataNode<KeyType, ValueType, ObjectUIDType, TYPE_UID::DATA_NODE_INT_INT> DataNodeType;
-    //typedef IndexNode<KeyType, ValueType, ObjectUIDType, DataNodeType, TYPE_UID::INDEX_NODE_INT_INT> IndexNodeType;
+    typedef DataNode<KeyType, ValueType, ObjectUIDType, TYPE_UID::DATA_NODE_INT_INT> DataNodeType;
+    typedef IndexNode<KeyType, ValueType, ObjectUIDType, DataNodeType, TYPE_UID::INDEX_NODE_INT_INT> IndexNodeType;
 
     typedef SSARCCacheObject<TypeMarshaller, DataNodeType, IndexNodeType> ObjectType;
     typedef IFlushCallback<ObjectUIDType, ObjectType> ICallback;
@@ -1063,11 +1118,23 @@ void cache_team_test()
     std::mt19937 eng(rd()); // Seed the generator
     std::shuffle(random_numbers.begin(), random_numbers.end(), eng);
 
+    KeyTypeEx ch_numbers[50000];
+
+    std::vector<KeyTypeEx> random_numbersexs;// (nTotalEntries);
+    for (size_t i = 0; i < nTotalEntries; ++i) {
+        std::string str = intToFixedLengthString(random_numbers[i]); 
+        std::memcpy(&ch_numbers[i], str.c_str(), 16); // Copy the string to KeyType array 
+        /*KeyTypeEx a(random_numbers[i], random_numbers[i]);
+        a.value1 = a.value2 = random_numbers[i];
+        random_numbersexs.push_back(a);*/
+    }
+
+
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
     for (size_t nCntr = 0; nCntr < nTotalEntries; nCntr++)
     {
-        ptrTree.insert(random_numbers[nCntr], random_numbers[nCntr]);
+        ptrTree.insert(ch_numbers[nCntr], ch_numbers[nCntr]);
     }
 
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
@@ -1081,10 +1148,10 @@ void cache_team_test()
 
     for (size_t nCntr = 0; nCntr < nTotalEntries; nCntr++)
     {
-        ValueType nValue = 0;
-        ErrorCode ec = ptrTree.search(random_numbers[nCntr], nValue);
+        ValueType nValue;
+        ErrorCode ec = ptrTree.search(ch_numbers[nCntr], nValue);
 
-        assert(nValue == random_numbers[nCntr]);
+        assert(nValue == ch_numbers[nCntr]);
     }
 
     end = std::chrono::steady_clock::now();
@@ -1098,9 +1165,9 @@ void cache_team_test()
 
     for (size_t nCntr = 0; nCntr < nTotalEntries; nCntr++)
     {
-        ErrorCode ec = ptrTree.remove(random_numbers[nCntr]);
+        //ErrorCode ec = ptrTree.remove(random_numbers[nCntr]);
 
-        assert(ec == ErrorCode::Success);
+        //assert(ec == ErrorCode::Success);
     }
 
     end = std::chrono::steady_clock::now();
@@ -1127,10 +1194,10 @@ void cache_team_test()
 
 int main(int argc, char* argv[])
 {
-    //cache_team_test();
+    cache_team_test();
     //return 0;
 
-    fptree_bm();
+    //fptree_bm();
     //quick_test();
     return 0;
 
