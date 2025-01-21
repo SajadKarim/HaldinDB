@@ -826,19 +826,45 @@ void quick_test()
     }
 }
 
+struct CHAR16 {
+    char data[16];
+
+    // Default constructor (trivial)
+    CHAR16() = default;
+
+    // Parameterized constructor
+    CHAR16(const char* str) {
+        std::memset(data, 0, sizeof(data));
+        strncpy_s(data, sizeof(data), str, sizeof(data) - 1);
+    }
+
+    // Define the < operator for comparison
+    bool operator<(const CHAR16& other) const {
+        return std::strncmp(data, other.data, sizeof(data)) < 0;
+    }
+
+    // Define the == operator for comparison
+    bool operator==(const CHAR16& other) const {
+        return std::strncmp(data, other.data, sizeof(data)) == 0;
+    }
+};
+
 template <typename BPlusStoreType>
 void fptree_test(BPlusStoreType* ptrTree, size_t nMaxNumber)
 {
-    //std::ifstream file("/home/skarim/Reproducibility/benchmarks/microbenchmarks/values_int.dat"); 
-    //std::vector<int64_t> random_numbers;
+    std::ifstream file("/home/skarim/Reproducibility/benchmarks/microbenchmarks/values_int.dat"); 
+    std::vector<CHAR16> random_numbers;
     //int64_t number; 
-    //std::string line;
+    std::string line;
     
-    //while (std::getline(file, line)) 
-    //{ 
+    while (std::getline(file, line)) 
+    { 
+        CHAR16 itm;
+        std::memcpy(&itm.data, line.c_str(), 15);
+        itm.data[15] = '\0';
 //	    number = std::stoull(line);
-  //      random_numbers.push_back(number);
-    //} 
+        random_numbers.push_back(itm);
+    } 
     
    /* for (const auto &num : random_numbers)
     { 
@@ -846,17 +872,17 @@ void fptree_test(BPlusStoreType* ptrTree, size_t nMaxNumber)
     }*/
 //	std::cout << "---" <<  random_numbers.size() << std::endl;
 
-    std::vector<int> random_numbers(nMaxNumber);//50000000);
-    std::iota(random_numbers.begin(), random_numbers.end(), 1); // Fill vector with 1 to 5,000,000    
-    std::random_device rd; // Obtain a random number from hardware
-    std::mt19937 eng(rd()); // Seed the generator
+    //std::vector<int> random_numbers(nMaxNumber);//50000000);
+    //std::iota(random_numbers.begin(), random_numbers.end(), 1); // Fill vector with 1 to 5,000,000    
+    //std::random_device rd; // Obtain a random number from hardware
+    //std::mt19937 eng(rd()); // Seed the generator
     //std::shuffle(random_numbers.begin(), random_numbers.end(), eng);
 
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
     for (size_t nCntr = 0; nCntr < nMaxNumber; nCntr++)
     {
-        ptrTree->insert(random_numbers[nCntr], random_numbers[nCntr]);
+        ptrTree->insert(random_numbers[nCntr], 0);
     }
 
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
@@ -885,10 +911,10 @@ void fptree_test(BPlusStoreType* ptrTree, size_t nMaxNumber)
 
     for (size_t nCntr = 0; nCntr < nMaxNumber; nCntr++)
     {
-        int32_t nValue = 0;
+        int64_t nValue = 0;
         ErrorCode ec = ptrTree->search(random_numbers[nCntr], nValue);
 
-        assert(nValue == random_numbers[nCntr]);
+        //assert(nValue == random_numbers[nCntr]);
     }
 
     end = std::chrono::steady_clock::now();
@@ -906,10 +932,10 @@ ptrTree->flush();
 
     for (size_t nCntr = 0; nCntr < nMaxNumber; nCntr++)
     {
-        int32_t nValue = 0;
+        int64_t nValue = 0;
         ErrorCode ec = ptrTree->remove(random_numbers[nCntr]);
 
-        assert(nValue == random_numbers[nCntr]);
+        //assert(nValue == random_numbers[nCntr]);
     }
 
     end = std::chrono::steady_clock::now();
@@ -923,8 +949,8 @@ ptrTree->flush();
 void fptree_bm()
 {
 #ifdef __TREE_WITH_CACHE__
-    typedef int32_t KeyType;
-    typedef int32_t ValueType;
+    typedef CHAR16 KeyType;
+    typedef int64_t ValueType;
 
     typedef ObjectFatUID ObjectUIDType;
 
@@ -1197,7 +1223,7 @@ int main(int argc, char* argv[])
     cache_team_test();
     //return 0;
 
-    //fptree_bm();
+    fptree_bm();
     //quick_test();
     return 0;
 
