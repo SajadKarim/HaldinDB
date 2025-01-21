@@ -29,6 +29,7 @@
 #include "SSARCCacheObject.hpp"
 #include <string>
 
+
 #define __VALIDITY_CHECK__
 
 #ifdef _MSC_VER
@@ -835,7 +836,7 @@ struct CHAR16 {
     // Parameterized constructor
     CHAR16(const char* str) {
         std::memset(data, 0, sizeof(data));
-        strncpy_s(data, sizeof(data), str, sizeof(data) - 1);
+        strncpy(data, str, sizeof(data) - 1);
     }
 
     // Define the < operator for comparison
@@ -849,10 +850,14 @@ struct CHAR16 {
     }
 };
 
+
+
 template <typename BPlusStoreType>
 void fptree_test(BPlusStoreType* ptrTree, size_t nMaxNumber)
 {
-    std::ifstream file("/home/skarim/Reproducibility/benchmarks/microbenchmarks/values_int.dat"); 
+    //std::ifstream file("/home/skarim/Reproducibility/benchmarks/microbenchmarks/values_int.dat"); 
+    std::ifstream file("/home/skarim/Reproducibility/benchmarks/microbenchmarks/values_string.dat"); 
+
     std::vector<CHAR16> random_numbers;
     //int64_t number; 
     std::string line;
@@ -866,11 +871,11 @@ void fptree_test(BPlusStoreType* ptrTree, size_t nMaxNumber)
         random_numbers.push_back(itm);
     } 
     
-   /* for (const auto &num : random_numbers)
-    { 
-        std::cout << num << std::endl; 
-    }*/
-//	std::cout << "---" <<  random_numbers.size() << std::endl;
+    //r (const auto &num : random_numbers)
+    //
+    //  std::cout << num << std::endl; 
+   //
+	std::cout << "---" <<  random_numbers.size() << std::endl;
 
     //std::vector<int> random_numbers(nMaxNumber);//50000000);
     //std::iota(random_numbers.begin(), random_numbers.end(), 1); // Fill vector with 1 to 5,000,000    
@@ -891,12 +896,12 @@ void fptree_test(BPlusStoreType* ptrTree, size_t nMaxNumber)
         << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "us"
         << ", " << std::chrono::duration_cast<std::chrono::nanoseconds> (end - begin).count() << "ns]"
         << std::endl;
- return;
+ //return;
     std::this_thread::sleep_for(std::chrono::seconds(10));
 
     begin = std::chrono::steady_clock::now();
 
-    //ptrTree->flush();
+    ptrTree->flush();
 
     end = std::chrono::steady_clock::now();
     std::cout
@@ -926,7 +931,7 @@ void fptree_test(BPlusStoreType* ptrTree, size_t nMaxNumber)
 
     std::this_thread::sleep_for(std::chrono::seconds(10));
 return;
-ptrTree->flush();
+//ptrTree->flush();
 
     begin = std::chrono::steady_clock::now();
 
@@ -960,7 +965,7 @@ void fptree_bm()
     //typedef DataNode<KeyType, ValueType, ObjectUIDType, TYPE_UID::DATA_NODE_INT_INT> DataNodeType;
     //typedef IndexNode<KeyType, ValueType, ObjectUIDType, DataNodeType, TYPE_UID::INDEX_NODE_INT_INT> IndexNodeType;
 
-    typedef SSARCCacheObject<TypeMarshaller, DataNodeType, IndexNodeType> ObjectType;
+    typedef LRUCacheObject<TypeMarshaller, DataNodeType, IndexNodeType> ObjectType;
     typedef IFlushCallback<ObjectUIDType, ObjectType> ICallback;
 
     //typedef BPlusStore<ICallback, KeyType, ValueType, LRUCache<ICallback, FileStorage<ICallback, ObjectUIDType, LRUCacheObject, TypeMarshaller, DataNodeType, IndexNodeType>>> BPlusStoreType;
@@ -969,13 +974,15 @@ void fptree_bm()
     //typedef BPlusStore<ICallback, KeyType, ValueType, LRUCache<ICallback, VolatileStorage<ICallback, ObjectUIDType, LRUCacheObject, TypeMarshaller, DataNodeType, IndexNodeType>>> BPlusStoreType;
     //BPlusStoreType ptrTree(24, 1024, 4096, 10ULL * 1024 * 1024 * 1024);
 
-    typedef BPlusStore<ICallback, KeyType, ValueType, SSARCCache<ICallback, PMemStorage<ICallback, ObjectUIDType, SSARCCacheObject, TypeMarshaller, DataNodeType, IndexNodeType>>> BPlusStoreType;
-
+    typedef BPlusStore<ICallback, KeyType, ValueType, LRUCache<ICallback, PMemStorage<ICallback, ObjectUIDType, LRUCacheObject, TypeMarshaller, DataNodeType, IndexNodeType>>> BPlusStoreType;
+	
+    //typedef BPlusStore<KeyType, ValueType, NoCache<ObjectUIDType, NoCacheObject, DataNodeType, IndexNodeType>> BPlusStoreType;
+    
     // Single-threaded test
     {
         size_t nMaxNumber = 5000000;
 	
-        for (size_t nDegree = 512; nDegree < 4000; nDegree = nDegree + 10)
+        for (size_t nDegree = 32; nDegree < 4000; nDegree = nDegree + 10)
         {
 		//break;
             size_t nInternalNodeSize = (nDegree - 1) * sizeof(ValueType) + nDegree * sizeof(ObjectUIDType) + sizeof(int*);
@@ -1006,7 +1013,7 @@ void fptree_bm()
                 //break;
             }
 	    std::cout << std::endl;
-            std::this_thread::sleep_for(std::chrono::seconds(10));
+            //std::this_thread::sleep_for(std::chrono::seconds(10));
             //break;
         }
     }
@@ -1086,7 +1093,7 @@ struct KeyTypeEx {
     // Parameterized constructor
     KeyTypeEx(const char* str) {
         std::memset(data, 0, sizeof(data));
-        strncpy_s(data, sizeof(data), str, sizeof(data) - 1);
+        strncpy(data, str, sizeof(data) - 1);
     }
 
     // Define the < operator for comparison
@@ -1104,12 +1111,14 @@ struct KeyTypeEx {
 
 std::string intToFixedLengthString(int value, size_t length = 16) {
     char buffer[16]; // Create a buffer of 9 chars to include the null terminator 
-    sprintf_s(buffer, sizeof(buffer), "%08d", value); // Convert the integer to a string return 
+    snprintf(buffer, sizeof(buffer), "%08d", value); // Convert the integer to a string return 
     return std::string(buffer); // Return the string 
 }
 
 void cache_team_test()
 {
+#ifdef __TREE_WITH_CACHE__
+
     typedef KeyTypeEx KeyType;
     typedef KeyTypeEx ValueType;
     typedef ObjectFatUID ObjectUIDType;
@@ -1213,6 +1222,7 @@ void cache_team_test()
         << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "us"
         << ", " << std::chrono::duration_cast<std::chrono::nanoseconds> (end - begin).count() << "ns]"
         << std::endl;
+#endif //__TREE_WITH_CACHE__
 
 
 }
@@ -1220,7 +1230,7 @@ void cache_team_test()
 
 int main(int argc, char* argv[])
 {
-    cache_team_test();
+    //cache_team_test();
     //return 0;
 
     fptree_bm();
