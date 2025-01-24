@@ -836,7 +836,11 @@ struct CHAR16 {
     // Parameterized constructor
     CHAR16(const char* str) {
         std::memset(data, 0, sizeof(data));
+#ifndef _MSC_VER
         strncpy(data, str, sizeof(data) - 1);
+#else _MSC_VER
+        strncpy_s(data, sizeof(data), str, sizeof(data) - 1); 
+#endif _MSC_VER
     }
 
     // Define the < operator for comparison
@@ -960,10 +964,10 @@ void fptree_bm()
     typedef ObjectFatUID ObjectUIDType;
 
     typedef DataNodeROpt<KeyType, ValueType, ObjectUIDType, TYPE_UID::DATA_NODE_INT_INT> DataNodeType;
-    typedef IndexNodeROpt<KeyType, ValueType, ObjectUIDType, DataNodeType, TYPE_UID::INDEX_NODE_INT_INT> IndexNodeType;
+    //typedef IndexNodeROpt<KeyType, ValueType, ObjectUIDType, DataNodeType, TYPE_UID::INDEX_NODE_INT_INT> IndexNodeType;
 
     //typedef DataNode<KeyType, ValueType, ObjectUIDType, TYPE_UID::DATA_NODE_INT_INT> DataNodeType;
-    //typedef IndexNode<KeyType, ValueType, ObjectUIDType, DataNodeType, TYPE_UID::INDEX_NODE_INT_INT> IndexNodeType;
+    typedef IndexNode<KeyType, ValueType, ObjectUIDType, DataNodeType, TYPE_UID::INDEX_NODE_INT_INT> IndexNodeType;
 
     typedef LRUCacheObject<TypeMarshaller, DataNodeType, IndexNodeType> ObjectType;
     typedef IFlushCallback<ObjectUIDType, ObjectType> ICallback;
@@ -1093,7 +1097,11 @@ struct KeyTypeEx {
     // Parameterized constructor
     KeyTypeEx(const char* str) {
         std::memset(data, 0, sizeof(data));
+#ifndef _MSC_VER
         strncpy(data, str, sizeof(data) - 1);
+#else _MSC_VER
+        strncpy_s(data, sizeof(data), str, sizeof(data) - 1);
+#endif _MSC_VER
     }
 
     // Define the < operator for comparison
