@@ -913,12 +913,12 @@ void fptree_test(BPlusStoreType* ptrTree, size_t nMaxNumber)
         << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "us"
         << ", " << std::chrono::duration_cast<std::chrono::nanoseconds> (end - begin).count() << "ns]"
         << std::endl;
-
+    std::cout << (nMaxNumber*2) - nMaxNumber << std::endl;
     //std::this_thread::sleep_for(std::chrono::seconds(10));
 
     begin = std::chrono::steady_clock::now();
 
-    for (size_t nCntr = 0; nCntr < nMaxNumber; nCntr++)
+    for (size_t nCntr = nMaxNumber, end=nMaxNumber*2; nCntr < end; nCntr++)
     {
         int64_t nValue = 0;
         ErrorCode ec = ptrTree->search(random_numbers[nCntr], nValue);
@@ -957,7 +957,80 @@ return;
 
 void fptree_bm()
 {
-#ifdef __TREE_WITH_CACHE__
+#ifndef __TREE_WITH_CACHE__
+
+typedef CHAR16 KeyType;
+    typedef int64_t ValueType;
+
+    typedef ObjectFatUID ObjectUIDType;
+
+    //typedef DataNodeROpt<KeyType, ValueType, ObjectUIDType, TYPE_UID::DATA_NODE_INT_INT> DataNodeType;
+    //typedef IndexNodeROpt<KeyType, ValueType, ObjectUIDType, DataNodeType, TYPE_UID::INDEX_NODE_INT_INT> IndexNodeType;
+
+    //typedef DataNode<KeyType, ValueType, ObjectUIDType, TYPE_UID::DATA_NODE_INT_INT> DataNodeType;
+    //typedef IndexNode<KeyType, ValueType, ObjectUIDType, DataNodeType, TYPE_UID::INDEX_NODE_INT_INT> IndexNodeType;
+    typedef DataNode<KeyType, ValueType, ObjectUIDType, TYPE_UID::DATA_NODE_INT_INT> DataNodeType;
+    typedef IndexNode<KeyType, ValueType, ObjectUIDType, DataNodeType, TypeMarshaller, TYPE_UID::INDEX_NODE_INT_INT> IndexNodeType;
+
+    typedef LRUCacheObject<ObjectUIDType, TypeMarshaller, DataNodeType, IndexNodeType> ObjectType;
+    //typedef LRUCacheObject<TypeMarshaller, DataNodeType, IndexNodeType> ObjectType;
+    typedef IFlushCallback<ObjectUIDType, ObjectType> ICallback;
+
+    //typedef BPlusStore<ICallback, KeyType, ValueType, LRUCache<ICallback, FileStorage<ICallback, ObjectUIDType, LRUCacheObject, TypeMarshaller, DataNodeType, IndexNodeType>>> BPlusStoreType;
+    //BPlusStoreType ptrTree(24, 1024, 512, 10ULL * 1024 * 1024 * 1024, FILE_STORAGE_PATH);
+
+    //typedef BPlusStore<ICallback, KeyType, ValueType, LRUCache<ICallback, VolatileStorage<ICallback, ObjectUIDType, LRUCacheObject, TypeMarshaller, DataNodeType, IndexNodeType>>> BPlusStoreType;
+    //BPlusStoreType ptrTree(24, 1024, 4096, 10ULL * 1024 * 1024 * 1024);
+
+    //pedef BPlusStore<ICallback, KeyType, ValueType, LRUCache<ICallback, PMemStorage<ICallback, ObjectUIDType, LRUCacheObject, TypeMarshaller, DataNodeType, IndexNodeType>>> BPlusStoreType;
+
+    typedef BPlusStore<KeyType, ValueType, NoCache<ObjectUIDType, NoCacheObject, DataNodeType, IndexNodeType>> BPlusStoreType;
+
+    // Single-threaded test
+    {
+        size_t nMaxNumber = 5000000;
+
+        for (size_t nDegree = 100; nDegree < 14000; nDegree = nDegree + 100)
+        {
+                //break;
+            size_t nInternalNodeSize = (nDegree - 1) * sizeof(ValueType) + nDegree * sizeof(ObjectUIDType) + sizeof(int*);
+            size_t nTotalInternalNodes = nMaxNumber / nDegree;
+            //size_t nMemoryOfNodes = nTotalNodes * nNodeSize;
+            //size_t nMemoryOfData = nMaxNumber * sizeof(KeyType);
+            size_t nTotalMemory = nTotalInternalNodes * nInternalNodeSize;
+            size_t nTotalMemoryInMB = nTotalMemory / (1024 * 1024);
+
+            size_t nBlockSize = nInternalNodeSize > 256 ? 256 : 32;
+
+            std::cout
+                << "Order = " << nDegree
+                << ", Total IN (n) = " << nTotalInternalNodes
+                << ", Total Memory (MB) = " << nTotalMemoryInMB
+                << ", Block Size = " << nBlockSize
+                << std::endl;
+
+            for (size_t nCntr = 0; nCntr < 1; nCntr++)
+            {
+		 //BPlusStoreType ptrTree(nDegree, nTotalMemoryInMB, nBlockSize, 25ULL * 1024 * 1024 * 1024, FILE_STORAGE_PATH);
+                BPlusStoreType ptrTree(nDegree);
+                ptrTree.init<DataNodeType>();
+
+                std::cout << "Iteration = " << nCntr + 1 << std::endl;
+                fptree_test<BPlusStoreType>(&ptrTree, nMaxNumber);
+                std::this_thread::sleep_for(std::chrono::seconds(10));
+                //break;
+            }
+            std::cout << std::endl;
+            //std::this_thread::sleep_for(std::chrono::seconds(10));
+            //break;
+        }
+    }
+return;
+
+
+
+
+#else
     typedef CHAR16 KeyType;
     typedef int64_t ValueType;
 
@@ -989,7 +1062,7 @@ void fptree_bm()
     {
         size_t nMaxNumber = 5000000;
 	
-        for (size_t nDegree = 4000; nDegree < 14000; nDegree = nDegree + 100)
+        for (size_t nDegree = 100; nDegree < 14000; nDegree = nDegree + 100)
         {
 		//break;
             size_t nInternalNodeSize = (nDegree - 1) * sizeof(ValueType) + nDegree * sizeof(ObjectUIDType) + sizeof(int*);
