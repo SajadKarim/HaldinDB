@@ -52,6 +52,10 @@ std::variant<std::shared_ptr<Types>...> cloneVariant(const std::variant<std::sha
 
 template <typename T>
 void resetCoreValue(std::shared_ptr<T>& source) {
+	if (source == nullptr)
+	{
+		return;
+	}
 	source.reset();
 }
 
@@ -62,19 +66,26 @@ void resetVaraint(std::variant<std::shared_ptr<Types>...>& source) {
 		}, source);
 }
 
-template <typename CoreTypesMarshaller, typename... ValueCoreTypes>
+template <typename ObjectUIDType, typename CoreTypesMarshaller, typename... ValueCoreTypes>
 class LRUCacheObject
 {
 private:
+	typedef LRUCacheObject<ObjectUIDType, CoreTypesMarshaller, ValueCoreTypes...> SelfType;
+
 	typedef std::variant<std::shared_ptr<ValueCoreTypes>...> ValueCoreTypesWrapper;
 
 public:
 	typedef std::tuple<ValueCoreTypes...> ValueCoreTypesTuple;
 
-private:
+public:
+	std::shared_ptr<LRUCacheObject>* hook;
 	bool m_bDirty;
 	ValueCoreTypesWrapper m_objData;
 	std::shared_mutex m_mtx;
+
+	ObjectUIDType m_uidSelf;
+	std::shared_ptr<SelfType> m_ptrPrev;
+	std::shared_ptr<SelfType> m_ptrNext;
 
 public:
 	~LRUCacheObject()
@@ -83,23 +94,64 @@ public:
 	}
 
 	template<class ValueCoreType>
-	LRUCacheObject(std::shared_ptr<ValueCoreType> ptrCoreObject)
+	LRUCacheObject(uint8_t nType, std::shared_ptr<ValueCoreType> ptrCoreObject)
 		: m_bDirty(true)
+		, m_ptrNext(nullptr)
+		, m_ptrPrev(nullptr)
+		, hook(NULL)
 	{
 		m_objData = ptrCoreObject;
+
+		//ObjectUIDType::createAddressFromVolatilePointer(m_uidSelf, nType, reinterpret_cast<uintptr_t>(this));
 	}
 
-	LRUCacheObject(std::fstream& fs)
+	template<class ValueCoreType>
+	LRUCacheObject(/*const ObjectUIDType& uidObject, */std::shared_ptr<ValueCoreType> ptrCoreObject)
+		: m_bDirty(true)
+		, m_ptrNext(nullptr)
+		, m_ptrPrev(nullptr)
+		, hook(NULL)
+	{
+		m_objData = ptrCoreObject;
+
+		//auto a = reinterpret_cast<uintptr_t>(this);
+	}
+
+	LRUCacheObject(/*const ObjectUIDType& uidObject, */std::fstream& fs)
 		: m_bDirty(false)
+		, m_ptrNext(nullptr)
+		, m_ptrPrev(nullptr)
+		, hook(NULL)
 	{
 		CoreTypesMarshaller::template deserialize<ValueCoreTypesWrapper, ValueCoreTypes...>(fs, m_objData);
 	}
 
-	LRUCacheObject(const char* szBuffer)
+	LRUCacheObject(/*const ObjectUIDType& uidObject, */const char* szBuffer)
 		: m_bDirty(false)
+		, m_ptrNext(nullptr)
+		, m_ptrPrev(nullptr)
+		, hook(NULL)
 	{
 		CoreTypesMarshaller::template deserialize<ValueCoreTypesWrapper, ValueCoreTypes...>(szBuffer, m_objData);
 	}
+
+	inline void hook_(std::shared_ptr<LRUCacheObject>* ref)
+	{
+		hook = ref;
+	}
+
+	inline void unhook_()
+	{
+		if (hook == NULL)
+		{
+			return;
+		}
+		*hook = nullptr;
+
+		m_ptrNext = nullptr;
+		m_ptrPrev=nullptr;
+	}
+
 
 	inline void serialize(std::fstream& fs, uint8_t& uidObject, uint32_t& nBufferSize)
 	{
@@ -110,6 +162,17 @@ public:
 	{
 		CoreTypesMarshaller::template serialize<ValueCoreTypes...>(szBuffer, m_objData, uidObject, nBufferSize);
 	}
+
+	inline ObjectUIDType getUID() const
+	{
+		return m_uidSelf;
+	}
+
+	inline void setUID(ObjectUIDType& uid)
+	{
+		m_uidSelf = uid;
+	}
+
 
 	inline bool getDirtyFlag() const 
 	{

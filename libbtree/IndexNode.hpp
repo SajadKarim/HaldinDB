@@ -12,10 +12,11 @@
 #include <fstream>
 #include <assert.h>
 #include "ErrorCodes.h"
+#include "LRUCacheObject.hpp"
 
 using namespace std;
 
-template <typename KeyType, typename ValueType, typename ObjectUIDType, typename DataNodeType, uint8_t TYPE_UID>
+template <typename KeyType, typename ValueType, typename ObjectUIDType, typename DataNodeType, typename TypeMarshaller, uint8_t TYPE_UID>
 class IndexNode
 {
 public:
@@ -23,15 +24,60 @@ public:
 	static const uint8_t UID = TYPE_UID;
 
 private:
-	typedef IndexNode<KeyType, ValueType, ObjectUIDType, DataNodeType, UID> SelfType;
+	typedef IndexNode<KeyType, ValueType, ObjectUIDType, DataNodeType, TypeMarshaller, UID> SelfType;
+
+	typedef std::variant<std::shared_ptr<DataNodeType>, std::shared_ptr<SelfType>> ValueCoreTypesWrapper;
+	typedef LRUCacheObject<ObjectUIDType, TypeMarshaller, DataNodeType, SelfType> CacheObject;
+
+	struct XYZ {
+		ObjectUIDType uid;
+		std::shared_ptr<CacheObject> ptr;
+
+		XYZ() {
+
+		}
+		XYZ(const ObjectUIDType& _uid, const std::shared_ptr<CacheObject> _obj)
+		{
+			uid = _uid;
+			ptr = _obj;
+			_obj->hook_(&ptr);
+		}
+
+		// Copy constructor
+		XYZ(const XYZ& other) {
+			uid = other.uid;
+			ptr = other.ptr;
+			if (ptr) {
+				ptr->hook_(&ptr);
+			}
+		}
+
+		// Assignment operator
+		XYZ& operator=(const XYZ& other) {
+			if (this != &other) {
+				uid = other.uid;
+				ptr = other.ptr;
+				if (ptr) {
+					ptr->hook_(&ptr);
+				}
+			}
+			return *this;
+		}
+	};
 
 	typedef std::vector<KeyType>::const_iterator KeyTypeIterator;
-	typedef std::vector<ObjectUIDType>::const_iterator CacheKeyTypeIterator;
+	typedef std::vector<XYZ>::const_iterator CacheKeyTypeIterator;
+	typedef std::vector<std::shared_ptr<CacheObject>>::const_iterator ItemsKeyTypeIterator;
+
+
 
 private:
 	// Vector to store pivot keys and child node UIDs
 	std::vector<KeyType> m_vtPivots;
-	std::vector<ObjectUIDType> m_vtChildren;
+	std::vector<XYZ> m_vtChildren;
+
+public:
+	//std::vector<std::shared_ptr<CacheObject>> m_ptChildren;
 
 public:
 	// Destructor: Clears pivot and child vectors
@@ -51,6 +97,7 @@ public:
 	{
 		m_vtPivots.assign(source.m_vtPivots.begin(), source.m_vtPivots.end());
 		m_vtChildren.assign(source.m_vtChildren.begin(), source.m_vtChildren.end());
+		//m_ptChildren.assign(source.m_ptChildren.begin(), source.m_ptChildren.end());
 	}
 
 	// Constructor that deserializes the node from raw data
@@ -70,13 +117,21 @@ public:
 
 			m_vtPivots.resize(nKeyCount);
 			m_vtChildren.resize(nKeyCount + 1);
+			//m_ptChildren.resize(nKeyCount + 1);
 
 			uint32_t nKeysSize = nKeyCount * sizeof(KeyType);
 			memcpy(m_vtPivots.data(), szData + nOffset, nKeysSize);
 			nOffset += nKeysSize;
 
-			uint32_t nValuesSize = (nKeyCount + 1) * sizeof(typename ObjectUIDType::NodeUID);
-			memcpy(m_vtChildren.data(), szData + nOffset, nValuesSize);
+			//uint32_t nValuesSize = (nKeyCount + 1) * sizeof(XYZ);
+			//uint32_t nValuesSize_ = (nKeyCount + 1) * (sizeof(typename ObjectUIDType::NodeUID) + sizeof(std::shared_ptr<CacheObject>));
+			//memcpy(m_vtChildren.data(), szData + nOffset, nValuesSize);
+
+			for (auto& ptr : m_vtChildren) {
+				memcpy(&(ptr.uid), szData + nOffset, sizeof(typename ObjectUIDType::NodeUID));
+				ptr.ptr = nullptr;
+				nOffset += sizeof(typename ObjectUIDType::NodeUID);
+			}
 		}
 		else
 		{
@@ -102,9 +157,14 @@ public:
 
 			m_vtPivots.resize(nPivotCount);
 			m_vtChildren.resize(nPivotCount + 1);
+			//m_ptChildren.resize(nPivotCount + 1);
 
 			fs.read(reinterpret_cast<char*>(m_vtPivots.data()), nPivotCount * sizeof(KeyType));
 			fs.read(reinterpret_cast<char*>(m_vtChildren.data()), (nPivotCount + 1) * sizeof(typename ObjectUIDType::NodeUID));
+
+			//for (auto& ptr : m_ptChildren) {
+			//	ptr = nullptr;
+			//}
 		}
 		else
 		{
@@ -118,18 +178,27 @@ public:
 	}
 
 	// Constructor that initializes the node with iterators over pivot keys and children
-	IndexNode(KeyTypeIterator itBeginPivots, KeyTypeIterator itEndPivots, CacheKeyTypeIterator itBeginChildren, CacheKeyTypeIterator itEndChildren)
+	IndexNode(KeyTypeIterator itBeginPivots, KeyTypeIterator itEndPivots, 
+		CacheKeyTypeIterator itBeginChildren, CacheKeyTypeIterator itEndChildren)//,
+		//ItemsKeyTypeIterator itBeginItem, ItemsKeyTypeIterator itEndItem)
 	{
 		m_vtPivots.assign(itBeginPivots, itEndPivots);
 		m_vtChildren.assign(itBeginChildren, itEndChildren);
+		//m_ptChildren.assign(itBeginItem, itEndItem);
 	}
 
 	// Constructor that creates an internal node with a pivot key and two child UIDs
-	IndexNode(const KeyType& pivotKey, const ObjectUIDType& ptrLHSNode, const ObjectUIDType& ptrRHSNode)
+	IndexNode(const KeyType& pivotKey, const ObjectUIDType& uidLHSNode, const shared_ptr<CacheObject> ptrLHSNode, const ObjectUIDType& uidRHSNode, const shared_ptr<CacheObject> ptrRHSNode)
 	{
 		m_vtPivots.push_back(pivotKey);
-		m_vtChildren.push_back(ptrLHSNode);
-		m_vtChildren.push_back(ptrRHSNode);
+		m_vtChildren.push_back(XYZ(uidLHSNode, ptrLHSNode));
+		m_vtChildren.push_back(XYZ(uidRHSNode, ptrRHSNode));
+
+		//m_ptChildren.push_back(ptrLHSNode);
+		//ptrLHSNode->hook_(&m_ptChildren[m_ptChildren.size() - 1]);
+
+		//m_ptChildren.push_back(ptrRHSNode);
+		//ptrRHSNode->hook_(&m_ptChildren[m_ptChildren.size() - 1]);
 	}
 
 public:
@@ -192,10 +261,11 @@ public:
 				= sizeof(uint8_t)					// UID
 				+ sizeof(uint16_t)						// Total keys
 				+ (nKeyCount * sizeof(KeyType))			// Size of all keys
-				+ (nValueCount * sizeof(typename ObjectUIDType::NodeUID));	// Size of all values
+				+ (nValueCount * sizeof(typename ObjectUIDType::NodeUID))	// Size of all values
+			+1;
 
-			szBuffer = new char[nBufferSize + 1];
-			memset(szBuffer, 0, nBufferSize + 1);
+			szBuffer = new char[nBufferSize];
+			memset(szBuffer, 0, nBufferSize);
 
 			size_t nOffset = 0;
 			memcpy(szBuffer, &uidObjectType, sizeof(uint8_t));
@@ -208,16 +278,37 @@ public:
 			memcpy(szBuffer + nOffset, m_vtPivots.data(), nKeysSize);
 			nOffset += nKeysSize;
 
-			size_t nValuesSize = (nKeyCount + 1) * sizeof(typename ObjectUIDType::NodeUID);
-			memcpy(szBuffer + nOffset, m_vtChildren.data(), nValuesSize);
-			nOffset += nValuesSize;
+			for (auto it = m_vtChildren.begin(); it != m_vtChildren.end(); it++)
+			{
+				memcpy(szBuffer + nOffset, &((*it).uid), sizeof(typename ObjectUIDType::NodeUID));
+				nOffset += sizeof(typename ObjectUIDType::NodeUID);
+			}
 
+			szBuffer[nBufferSize - 1] = '\0';
+
+			for (auto it = m_vtChildren.begin(); it != m_vtChildren.end(); it++)
+			{
+				assert(((* it).uid).getMediaType() >= 2);
+				assert((*it).ptr == nullptr);
+			}
 #ifdef __VALIDITY_CHECK__
 			for (auto it = m_vtChildren.begin(); it != m_vtChildren.end(); it++)
 			{
 				assert((*it).getMediaType() >= 2);
 			}
 #endif //__VALIDITY_CHECK__
+
+			const IndexNode* ptrRawData = new IndexNode(szBuffer);
+			for (int idx = 0, end = ptrRawData->m_vtChildren.size(); idx < end; idx++)
+			{
+				assert(m_vtChildren[idx].uid == ptrRawData->m_vtChildren[idx].uid);
+				assert(m_vtChildren[idx].ptr == ptrRawData->m_vtChildren[idx].ptr);
+				assert(ptrRawData->m_vtChildren[idx].ptr == nullptr);
+				//assert(*(ptrRawData->ptrChildren + idx) == m_vtChildren[idx]);
+				//assert(*(ptrRawData->ptrChildren + idx + 1) == m_vtChildren[idx + 1]);
+			}
+
+
 		}
 		else
 		{
@@ -251,10 +342,19 @@ public:
 	}
 
 	// Gets the child node corresponding to the given key
-	inline const ObjectUIDType& getChild(const KeyType& key) const
+	inline void getChild(const KeyType& key, ObjectUIDType& uid, std::shared_ptr<CacheObject>& ptr) const
 	{
-		return m_vtChildren[getChildNodeIdx(key)];
+		uid = m_vtChildren[getChildNodeIdx(key)].uid;
+		ptr = m_vtChildren[getChildNodeIdx(key)].ptr;
 	}
+
+	//inline void updateChildPtr(const KeyType& key, ObjectUIDType& uid, std::shared_ptr<CacheObject>& ptr) const
+	//{
+	//	assert(uid == m_vtChildren[getChildNodeIdx(key)].uid);
+	//	m_vtChildren[getChildNodeIdx(key)].ptr = ptr;
+	//	ptr->hook_(&ptr);
+	//}
+
 
 	// Returns the first pivot key
 	inline const KeyType& getFirstChild() const
@@ -328,9 +428,46 @@ public:
 		auto it = std::upper_bound(m_vtPivots.begin(), m_vtPivots.end(), *key);
 		auto index = std::distance(m_vtPivots.begin(), it);
 
-		assert(m_vtChildren[index] == uidOld);
+		assert(m_vtChildren[index].uid == uidOld);
 
-		m_vtChildren[index] = uidNew;
+		m_vtChildren[index].uid = uidNew;
+		m_vtChildren[index].ptr = ptrChildNode;
+		ptrChildNode->hook_(&m_vtChildren[index].ptr);
+
+#ifdef __TRACK_CACHE_FOOTPRINT__
+		return 0;
+#else //__TRACK_CACHE_FOOTPRINT__
+		return;
+#endif //__TRACK_CACHE_FOOTPRINT__
+	}
+
+	template <typename CacheObjectType>
+#ifdef __TRACK_CACHE_FOOTPRINT__
+	int32_t updateChildUID_(std::shared_ptr<CacheObjectType> ptrChildNode, const ObjectUIDType& uidOld, const ObjectUIDType& uidNew)
+#else //__TRACK_CACHE_FOOTPRINT__
+	void updateChildUID_(std::shared_ptr<CacheObjectType> ptrChildNode, const ObjectUIDType& uidOld, const ObjectUIDType& uidNew)
+#endif //__TRACK_CACHE_FOOTPRINT__
+	{
+		const KeyType* key = nullptr;
+		if (std::holds_alternative<std::shared_ptr<SelfType>>(ptrChildNode->getInnerData()))
+		{
+			std::shared_ptr<SelfType> ptrIndexNode = std::get<std::shared_ptr<SelfType>>(ptrChildNode->getInnerData());
+			key = &ptrIndexNode->getFirstChild();
+		}
+		else //if (std::holds_alternative<std::shared_ptr<DataNodeType>>(ptrChildNode->getInnerData()))
+		{
+			std::shared_ptr<DataNodeType> ptrDataNode = std::get<std::shared_ptr<DataNodeType>>(ptrChildNode->getInnerData());
+			key = &ptrDataNode->getFirstChild();
+		}
+
+		auto it = std::upper_bound(m_vtPivots.begin(), m_vtPivots.end(), *key);
+		auto index = std::distance(m_vtPivots.begin(), it);
+
+		assert(m_vtChildren[index].uid == uidOld);
+
+		//m_vtChildren[index].uid = uidNew;
+		m_vtChildren[index].ptr = ptrChildNode;
+		ptrChildNode->hook_(&m_vtChildren[index].ptr);
 
 #ifdef __TRACK_CACHE_FOOTPRINT__
 		return 0;
@@ -346,12 +483,12 @@ public:
 
 		for (auto it = m_vtChildren.begin(), itend = m_vtChildren.end(); it != itend; it++)
 		{
-			if (mpUIDUpdates.find(*it) != mpUIDUpdates.end())
+			if (mpUIDUpdates.find((* it).uid) != mpUIDUpdates.end())
 			{
-				ObjectUIDType uidTemp = *it;
+				ObjectUIDType uidTemp = (* it).uid;
 
-				*it = *(mpUIDUpdates[*it].first);
-
+				(*it).uid = *(mpUIDUpdates[(* it).uid].first);
+				assert((*it).ptr == nullptr);
 				mpUIDUpdates.erase(uidTemp);
 
 				bDirty = true;
@@ -388,7 +525,7 @@ public:
 #ifdef __TRACK_CACHE_FOOTPRINT__
 	inline ErrorCode insert(const KeyType& pivotKey, const ObjectUIDType& uidSibling, int32_t& nMemoryFootprint)
 #else //__TRACK_CACHE_FOOTPRINT__
-	inline ErrorCode insert(const KeyType& pivotKey, const ObjectUIDType& uidSibling)
+	inline ErrorCode insert(const KeyType& pivotKey, const ObjectUIDType& uidSibling, const std::shared_ptr<CacheObject>& ptrSibling)
 #endif //__TRACK_CACHE_FOOTPRINT__
 	{
 #ifdef __TRACK_CACHE_FOOTPRINT__
@@ -400,7 +537,10 @@ public:
 		auto nChildIdx = std::distance(m_vtPivots.begin(), it);
 
 		m_vtPivots.insert(m_vtPivots.begin() + nChildIdx, pivotKey);
-		m_vtChildren.insert(m_vtChildren.begin() + nChildIdx + 1, uidSibling);
+		m_vtChildren.insert(m_vtChildren.begin() + nChildIdx + 1, XYZ(uidSibling, ptrSibling) );
+		//m_ptChildren.insert(m_ptChildren.begin() + nChildIdx + 1, ptrSibling);
+
+		//ptrSibling->hook_(&m_ptChildren[nChildIdx + 2]);
 
 #ifdef __TRACK_CACHE_FOOTPRINT__
 		if constexpr (std::is_trivial<KeyType>::value &&
@@ -753,6 +893,7 @@ public:
 		ptrCache->template createObjectOfType<SelfType>(uidSibling, ptrSibling,
 			m_vtPivots.begin() + nMid + 1, m_vtPivots.end(),
 			m_vtChildren.begin() + nMid + 1, m_vtChildren.end());
+			//m_ptChildren.begin() + nMid + 1, m_ptChildren.end());
 
 		if (!uidSibling)
 		{
@@ -760,6 +901,7 @@ public:
 		}
 
 		pivotKeyForParent = m_vtPivots[nMid];
+		//std::memcpy(pivotKeyForParent, m_vtPivots[nMid], sizeof(KeyType));
 
 		m_vtPivots.resize(nMid);
 		m_vtChildren.resize(nMid + 1);
@@ -1013,15 +1155,22 @@ public:
 					<< ")";
 			}
 
-			CacheObjectType ptrNode = nullptr;
+			CacheObjectType ptrNode = m_vtChildren[nIndex].ptr;
 
 #ifdef __TREE_WITH_CACHE__
 			std::optional<ObjectUIDType> uidUpdated = std::nullopt;
-			ptrCache->getObject(m_vtChildren[nIndex], ptrNode, uidUpdated);
+
+			if (ptrNode == nullptr) 
+			{
+				ptrCache->getObject(m_vtChildren[nIndex].uid, ptrNode, uidUpdated);
+				m_vtChildren[nIndex].ptr = ptrNode;
+				ptrNode->hook_(&m_vtChildren[nIndex].ptr);
+			}
 
 			if (uidUpdated != std::nullopt)
 			{
-				m_vtChildren[nIndex] = *uidUpdated;
+				m_vtChildren[nIndex].uid = *uidUpdated;
+				
 			}
 #else //__TREE_WITH_CACHE__
 			ptrCache->getObject(m_vtChildren[nIndex], ptrNode);

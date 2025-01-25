@@ -142,10 +142,10 @@ public:
 			nBufferSize = sizeof(uint8_t)				// UID
 				+ sizeof(uint16_t)						// Total entries
 				+ (nTotalEntries * sizeof(KeyType))		// Size of all keys
-				+ (nTotalEntries * sizeof(ValueType));	// Size of all values
+				+ (nTotalEntries * sizeof(ValueType)) + 1;	// Size of all values
 
-			szBuffer = new char[nBufferSize + 1];
-			memset(szBuffer, 0, nBufferSize + 1);
+			szBuffer = new char[nBufferSize];
+			memset(szBuffer, 0, nBufferSize);
 
 			uint16_t nOffset = 0;
 			memcpy(szBuffer, &UID, sizeof(uint8_t));
@@ -430,6 +430,7 @@ public:
 		}
 
 		pivotKeyForParent = m_vtKeys[nMid];
+		//std::memcpy(pivotKeyForParent, m_vtKeys[nMid], sizeof(KeyType));
 
 		m_vtKeys.resize(nMid);
 		m_vtValues.resize(nMid);

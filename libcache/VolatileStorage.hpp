@@ -14,7 +14,7 @@
 template<
 	typename ICallback,
 	typename KeyType,
-	template <typename, typename...> typename ValueType,
+	template <typename, typename, typename...> typename ValueType,
 	typename CoreTypesMarshaller,
 	typename... ValueCoreTypes
 >
@@ -24,7 +24,7 @@ class VolatileStorage
 
 public:
 	typedef KeyType ObjectUIDType;
-	typedef ValueType<CoreTypesMarshaller, ValueCoreTypes...> ObjectType;
+	typedef ValueType<KeyType, CoreTypesMarshaller, ValueCoreTypes...> ObjectType;
 
 private:
 	char* m_szStorage;
@@ -100,6 +100,7 @@ public:
 		//ptrObject->setDirtyFlag(false);
 		//delete[] szBuffer;
 
+		// todo add id.
 		return std::make_shared<ObjectType>(m_szStorage + uidObject.getPersistentPointerValue());
 	}
 
@@ -116,7 +117,7 @@ public:
 #ifdef __CONCURRENT__
 		std::unique_lock<std::shared_mutex> lock_storage(m_mtxStorage);
 #endif //__CONCURRENT__
-
+		//std::cout << nOffset << std::endl;
 		memcpy(m_szStorage + nOffset, szBuffer, nBufferSize);
 
 		//m_nNextBlock += std::ceil((nBufferSize + sizeof(uint8_t)) / (float)m_nBlockSize);;

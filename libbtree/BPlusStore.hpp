@@ -45,6 +45,8 @@ private:
     std::shared_ptr<CacheType> m_ptrCache;
     std::optional<ObjectUIDType> m_uidRootNode;
 
+    ObjectTypePtr m_ptrRootNode;
+
 #ifdef __CONCURRENT__
     mutable std::shared_mutex m_mutex;
 #endif //__CONCURRENT__
@@ -57,6 +59,7 @@ public:
     template<typename... CacheArgs>
     BPlusStore(uint32_t nDegree, CacheArgs... args)
         : m_nDegree(nDegree)
+        , m_ptrRootNode(nullptr)
         , m_uidRootNode(std::nullopt)
     {
         m_ptrCache = std::make_shared<CacheType>(args...);
@@ -69,7 +72,11 @@ public:
         m_ptrCache->init(this);
 #endif //__TREE_WITH_CACHE__
 
-        m_ptrCache->template createObjectOfType<DefaultNodeType>(m_uidRootNode);
+        //m_ptrCache->template createObjectOfType<DefaultNodeType>(m_uidRootNode);
+        m_ptrCache->template createObjectOfType<DefaultNodeType>(m_ptrRootNode, m_uidRootNode);
+        m_ptrRootNode->hook_(&m_ptrRootNode);
+        //m_ptrRootNode->unhook_();
+
     }
 
     ErrorCode insert(const KeyType& key, const ValueType& value, bool print = false)
@@ -99,11 +106,20 @@ public:
 #endif //__CONCURRENT__
 
         uidCurrentNode = m_uidRootNode.value();
+        ptrCurrentNode = m_ptrRootNode;
         do
-        {   
+        {
 #ifdef __TREE_WITH_CACHE__
             std::optional<ObjectUIDType> uidUpdated = std::nullopt;
-            m_ptrCache->getObject(uidCurrentNode, ptrCurrentNode, uidUpdated);
+            if (ptrCurrentNode == nullptr)
+            {
+                m_ptrCache->getObject(uidCurrentNode, ptrCurrentNode, uidUpdated);
+
+                std::shared_ptr<IndexNodeType> _ptr = std::get<std::shared_ptr<IndexNodeType>>(ptrLastNode->getInnerData());
+                _ptr->template updateChildUID_<ObjectType>(ptrCurrentNode, uidCurrentNode, uidCurrentNode);
+
+                // todo.. should be hooked here..
+            }
 #else //__TREE_WITH_CACHE__
             m_ptrCache->getObject(uidCurrentNode, ptrCurrentNode);
 #endif //__TREE_WITH_CACHE__
@@ -161,7 +177,7 @@ public:
                 uidLastNode = uidCurrentNode;
                 ptrLastNode = ptrCurrentNode;
 
-                uidCurrentNode = ptrIndexNode->getChild(key);
+                ptrIndexNode->getChild(key, uidCurrentNode, ptrCurrentNode);
             }
             else //if (std::holds_alternative<std::shared_ptr<DataNodeType>>(ptrCurrentNode->getInnerData()))
             {
@@ -248,7 +264,7 @@ public:
 #ifdef __TRACK_CACHE_FOOTPRINT__
             if (ptrIndexNode->insert(pivotKey, *uidRHSChildNode, nMemoryFootprint) != ErrorCode::Success)
 #else //__TRACK_CACHE_FOOTPRINT__
-            if (ptrIndexNode->insert(pivotKey, *uidRHSChildNode) != ErrorCode::Success)
+            if (ptrIndexNode->insert(pivotKey, *uidRHSChildNode, ptrRHSChildNode) != ErrorCode::Success)
 #endif //__TRACK_CACHE_FOOTPRINT__
             {
                 // TODO: Should update be performed on cloned objects first?
@@ -311,7 +327,11 @@ public:
         if (uidCurrentNode == m_uidRootNode && ptrLHSChildNode != nullptr && ptrRHSChildNode != nullptr)
         {
             m_uidRootNode = std::nullopt;
-            m_ptrCache->template createObjectOfType<IndexNodeType>(m_uidRootNode, pivotKey, *uidLHSChildNode, *uidRHSChildNode);
+            m_ptrCache->template createObjectOfType<IndexNodeType>(m_ptrRootNode, m_uidRootNode, pivotKey, *uidLHSChildNode, ptrLHSChildNode, *uidRHSChildNode, ptrRHSChildNode);
+
+            vtAccessedNodes.insert(vtAccessedNodes.begin(), std::make_pair(*m_uidRootNode, m_ptrRootNode));
+            m_ptrRootNode->hook_(&m_ptrRootNode);
+            vtAccessedNodes.insert(vtAccessedNodes.begin(), std::make_pair(*m_uidRootNode, m_ptrRootNode));
 
 #ifdef __TREE_WITH_CACHE__
             ptrCurrentNode->setDirtyFlag(true);
@@ -781,11 +801,17 @@ public:
 
         os << std::endl;
 
-        ObjectTypePtr ptrRootNode = nullptr;
+        ObjectTypePtr ptrRootNode = m_ptrRootNode;
 
 #ifdef __TREE_WITH_CACHE__
         std::optional<ObjectUIDType> uidUpdated = std::nullopt;
-        m_ptrCache->getObject(m_uidRootNode.value(), ptrRootNode, uidUpdated);
+
+        if (ptrRootNode == nullptr)
+        {
+            m_ptrCache->getObject(m_uidRootNode.value(), ptrRootNode, uidUpdated);
+            m_ptrRootNode = ptrRootNode;
+            m_ptrRootNode->hook_(&m_ptrRootNode);
+        }
 
         if (uidUpdated != std::nullopt)
         {
@@ -861,11 +887,12 @@ public:
     }
 
     void prepareFlush(std::vector<std::pair<ObjectUIDType, std::pair<std::optional<ObjectUIDType>, std::shared_ptr<ObjectType>>>>& vtNodes
-        , size_t nOffset, size_t& nNewOffset, size_t nBlockSize, ObjectUIDType::StorageMedia nMediaType)
+        , size_t nOffset, size_t& nNewOffset, size_t nBlockSize, ObjectUIDType::StorageMedia nMediaType
+        , std::unordered_map<ObjectUIDType, std::pair<std::optional<ObjectUIDType>, std::shared_ptr<ObjectType>>>& mpUIDUpdates)
     {
         nNewOffset = nOffset;
 
-        std::unordered_map<ObjectUIDType, std::pair<std::optional<ObjectUIDType>, std::shared_ptr<ObjectType>>> mpUIDUpdates;
+        //std::unordered_map<ObjectUIDType, std::pair<std::optional<ObjectUIDType>, std::shared_ptr<ObjectType>>> mpUIDUpdates;
 
         for (size_t idx = 0; idx < vtNodes.size(); idx++)
         {

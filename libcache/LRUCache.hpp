@@ -31,7 +31,7 @@ public:
 	typedef std::shared_ptr<ObjectType> ObjectTypePtr;
 
 private:
-	struct Item
+	/*struct Item
 	{
 	public:
 		ObjectUIDType m_uidSelf;
@@ -53,20 +53,21 @@ private:
 			m_ptrNext.reset();
 			m_ptrObject.reset();
 		}
-	};
+	};*/
 
 	ICallback* m_ptrCallback;
 
-	std::shared_ptr<Item> m_ptrHead;
-	std::shared_ptr<Item> m_ptrTail;
+	std::shared_ptr<ObjectType> m_ptrHead;
+	std::shared_ptr<ObjectType> m_ptrTail;
 
 	std::unique_ptr<StorageType> m_ptrStorage;
 
 	int64_t m_nCacheFootprint;
 	int64_t m_nCacheCapacity;
-	std::unordered_map<ObjectUIDType, std::shared_ptr<Item>> m_mpObjects;
+	std::unordered_map<ObjectUIDType, std::shared_ptr<ObjectType>> m_mpObjects;
 	std::unordered_map<ObjectUIDType, std::pair<std::optional<ObjectUIDType>, ObjectTypePtr>> m_mpUIDUpdates;
 
+	int64_t m_nUsedCacheCapacity;
 #ifdef __CONCURRENT__
 	bool m_bStop;
 
@@ -101,6 +102,7 @@ public:
 	template <typename... StorageArgs>
 	LRUCache(size_t nCapacity, StorageArgs... args)
 		: m_nCacheCapacity(nCapacity)
+		, m_nUsedCacheCapacity(0)
 		, m_nCacheFootprint(0)
 		, m_ptrHead(nullptr)
 		, m_ptrTail(nullptr)
@@ -177,14 +179,14 @@ public:
 		std::unique_lock<std::shared_mutex> lock_cache(m_mtxCache); // std::unique_lock due to LRU's linked-list update! is there any better way?
 #endif //__CONCURRENT__
 
-		if (m_mpObjects.find(uidObject) != m_mpObjects.end())
+		/*if (m_mpObjects.find(uidObject) != m_mpObjects.end())
 		{
-			std::shared_ptr<Item> ptrItem = m_mpObjects[uidObject];
+			std::shared_ptr<ObjectType> ptrItem = m_mpObjects[uidObject];
 			moveToFront(ptrItem);
-			ptrObject = ptrItem->m_ptrObject;
+			ptrObject = ptrItem;
 
 			return CacheErrorCode::Success;
-		}
+		}*/
 
 #ifdef __CONCURRENT__
 		std::unique_lock<std::shared_mutex> lock_storage(m_mtxStorage); // TODO: requesting the same key?
@@ -216,9 +218,14 @@ public:
 
 		ptrObject = m_ptrStorage->getObject(uidTemp);
 
+		//ObjectUIDType uidTemp;
+		//ObjectUIDType::createAddressFromVolatilePointer(uidTemp, uidTemp.getObjectType(), reinterpret_cast<uintptr_t>(ptrObject.get()));
+		ptrObject->setUID(uidTemp);
+		//uidObject = uidTemp;
+
 		if (ptrObject != nullptr)
 		{
-			std::shared_ptr<Item> ptrItem = std::make_shared<Item>(uidTemp, ptrObject);
+			//std::shared_ptr<ObjectType> ptrItem = std::make_shared<ObjectType>(uidTemp, ptrObject);
 
 #ifdef __CONCURRENT__
 			std::unique_lock<std::shared_mutex> re_lock_cache(m_mtxCache);
@@ -236,7 +243,7 @@ public:
 				m_nCacheFootprint += ptrObject->getMemoryFootprint();
 #endif //__TRACK_CACHE_FOOTPRINT__
 
-				std::shared_ptr<Item> ptrItem = m_mpObjects[uidTemp];
+				std::shared_ptr<ObjectType> ptrItem = m_mpObjects[uidTemp];
 				moveToFront(ptrItem);
 				return CacheErrorCode::Success;
 */
@@ -247,23 +254,25 @@ public:
 			m_nCacheFootprint += ptrItem->m_ptrObject->getMemoryFootprint();
 #endif //__TRACK_CACHE_FOOTPRINT__
 
-			m_mpObjects[ptrItem->m_uidSelf] = ptrItem;
+			//m_mpObjects[uidTemp] = ptrObject;
 
-			if (!m_ptrHead)
+			/*if (!m_ptrHead)
 			{
-				m_ptrHead = ptrItem;
-				m_ptrTail = ptrItem;
+				m_ptrHead = ptrObject;
+				m_ptrTail = ptrObject;
 			}
 			else
 			{
-				ptrItem->m_ptrNext = m_ptrHead;
-				m_ptrHead->m_ptrPrev = ptrItem;
-				m_ptrHead = ptrItem;
-			}
+				ptrObject->m_ptrNext = m_ptrHead;
+				m_ptrHead->m_ptrPrev = ptrObject;
+				m_ptrHead = ptrObject;
+			}*/
 
 #ifndef __CONCURRENT__
-			flushItemsToStorage();
+			//flushItemsToStorage();
 #endif //__CONCURRENT__
+
+			m_nUsedCacheCapacity++;
 
 			return CacheErrorCode::Success;
 		}
@@ -284,22 +293,24 @@ public:
 		{
 			std::pair<ObjectUIDType, ObjectTypePtr> prNode = vt.back();
 
-			if (m_mpObjects.find(prNode.first) != m_mpObjects.end())
+			//if (m_mpObjects.find(prNode.first) != m_mpObjects.end())
 			{
-				std::shared_ptr<Item> ptrItem = m_mpObjects[prNode.first];
-				moveToFront(ptrItem);	//TODO: How about passing whole list together and re-arrange the list?
+				//std::shared_ptr<ObjectType> ptrItem = m_mpObjects[prNode.first];
+				moveToFront(prNode.second);	//TODO: How about passing whole list together and re-arrange the list?
 			}
-			else
-			{
-				if (bEnsure)
-				{
-					std::cout << "Critical State: One or many entries in the reorder-list is missing in the cache." << std::endl;
-					throw new std::logic_error(".....");   // TODO: critical log.
-				}
-			}
+			//else
+			//{
+			//	if (bEnsure)
+			//	{
+			//		std::cout << "Critical State: One or many entries in the reorder-list is missing in the cache." << std::endl;
+			//		throw new std::logic_error(".....");   // TODO: critical log.
+			//	}
+			//}
 
 			vt.pop_back();
 		}
+
+		flushItemsToStorage();
 
 		return CacheErrorCode::Success;
 	}
@@ -307,7 +318,7 @@ public:
 	CacheErrorCode reorderOpt(std::vector<std::pair<ObjectUIDType, ObjectTypePtr>>& vtObjects, bool bEnsure = true)
 	{
 		size_t _test = vtObjects.size();
-		std::vector<std::shared_ptr<Item>> vtItems;
+		std::vector<std::shared_ptr<ObjectType>> vtItems;
 
 #ifdef __CONCURRENT__
 		std::unique_lock<std::shared_mutex> lock_cache(m_mtxCache);
@@ -346,7 +357,7 @@ public:
 //
 //		if (m_mpObjects.find(uidObject) != m_mpObjects.end())
 //		{
-//			std::shared_ptr<Item> ptrItem = m_mpObjects[uidObject];
+//			std::shared_ptr<ObjectType> ptrItem = m_mpObjects[uidObject];
 //			moveToFront(ptrItem);
 //
 //			if (std::holds_alternative<Type>(ptrItem->m_ptrObject->getInnerData()))
@@ -405,7 +416,7 @@ public:
 //				m_nCacheFootprint += ptrStorageObject->getMemoryFootprint();
 //#endif //__TRACK_CACHE_FOOTPRINT__
 //
-//				std::shared_ptr<Item> ptrItem = m_mpObjects[*uidTemp];
+//				std::shared_ptr<ObjectType> ptrItem = m_mpObjects[*uidTemp];
 //				moveToFront(ptrItem);
 //
 //				if (std::holds_alternative<Type>(ptrItem->m_ptrObject->getInnerData()))
@@ -417,7 +428,7 @@ public:
 //				return CacheErrorCode::Error;
 //			}
 //#endif //__CONCURRENT__
-//			std::shared_ptr<Item> ptrItem = std::make_shared<Item>(*uidTemp, ptrStorageObject);
+//			std::shared_ptr<ObjectType> ptrItem = std::make_shared<ObjectType>(*uidTemp, ptrStorageObject);
 //
 //			m_mpObjects[ptrItem->m_uidSelf] = ptrItem;
 //
@@ -454,72 +465,204 @@ public:
 //		return CacheErrorCode::Error;
 //	}
 
-	template<class Type, typename... ArgsType>
-	CacheErrorCode createObjectOfType(std::optional<ObjectUIDType>& uidObject, const ArgsType... args)
-	{
-		std::shared_ptr<Type> ptrCoreObject = std::make_shared<Type>(args...);
+template<class Type, typename... ArgsType>
+CacheErrorCode createObjectOfType_(ObjectTypePtr* ptrObject, std::optional<ObjectUIDType>& uidObject, const ArgsType... args)
+{
+	std::shared_ptr<Type> ptrCoreObject = std::make_shared<Type>(args...);
 
-		std::shared_ptr<ObjectType> ptrStorageObject = std::make_shared<ObjectType>(ptrCoreObject);
+	ptrObject = std::make_shared<ObjectType>(Type::UID, ptrCoreObject);
 
-		ObjectUIDType uidTemp;
-		ObjectUIDType::createAddressFromVolatilePointer(uidTemp, Type::UID, reinterpret_cast<uintptr_t>(ptrStorageObject.get()));
 
-		uidObject = uidTemp;
+	ObjectUIDType uidTemp;
+	ObjectUIDType::createAddressFromVolatilePointer(uidTemp, Type::UID, reinterpret_cast<uintptr_t>(ptrObject.get()));
+	ptrObject->setUID(uidTemp);
+	uidObject = uidTemp;
 
-		std::shared_ptr<Item> ptrItem = std::make_shared<Item>(*uidObject, ptrStorageObject);
+	//uidObject = uidTemp;
+	//ptrObject->setUID(uidTemp);
+
+	//std::shared_ptr<ObjectType> ptrItem = std::make_shared<ObjectType>(*uidObject, ptrStorageObject);
 
 #ifdef __CONCURRENT__
-		std::unique_lock<std::shared_mutex> lock_cache(m_mtxCache);
+	std::unique_lock<std::shared_mutex> lock_cache(m_mtxCache);
 #endif //__CONCURRENT__
 
-		if (m_mpObjects.find(*uidObject) != m_mpObjects.end())
-		{
-			std::cout << "Critical State: UID for a newly created object already exist in the cache." << std::endl;
-			throw new std::logic_error(".....");   // TODO: critical log.
+	if (m_mpObjects.find(*uidObject) != m_mpObjects.end())
+	{
+		std::cout << "Critical State: UID for a newly created object already exist in the cache." << std::endl;
+		throw new std::logic_error(".....");   // TODO: critical log.
 
-			std::shared_ptr<Item> ptrItem = m_mpObjects[*uidObject];
-			ptrItem->m_ptrObject = ptrStorageObject;
-			moveToFront(ptrItem);
+		//std::shared_ptr<ObjectType> ptrItem = m_mpObjects[*uidObject];
+		//ptrItem->m_ptrObject = ptrStorageObject;
+		//moveToFront(ptrItem);
+	}
+	else
+	{
+		//m_mpObjects[ptrObject->m_uidSelf] = ptrObject;
+
+#ifdef __TRACK_CACHE_FOOTPRINT__
+		m_nCacheFootprint += ptrStorageObject->getMemoryFootprint();
+#endif //__TRACK_CACHE_FOOTPRINT__
+
+		/*if (!m_ptrHead)
+		{
+			m_ptrHead = ptrObject;
+			m_ptrTail = ptrObject;
 		}
 		else
 		{
-			m_mpObjects[ptrItem->m_uidSelf] = ptrItem;
-
-#ifdef __TRACK_CACHE_FOOTPRINT__
-			m_nCacheFootprint += ptrStorageObject->getMemoryFootprint();
-#endif //__TRACK_CACHE_FOOTPRINT__
-
-			if (!m_ptrHead) 
-			{
-				m_ptrHead = ptrItem;
-				m_ptrTail = ptrItem;
-			}
-			else 
-			{
-				ptrItem->m_ptrNext = m_ptrHead;
-				m_ptrHead->m_ptrPrev = ptrItem;
-				m_ptrHead = ptrItem;
-			}
-		}
-
-#ifndef __CONCURRENT__
-		flushItemsToStorage();
-#endif //__CONCURRENT__
-
-		return CacheErrorCode::Success;
+			ptrObject->m_ptrNext = m_ptrHead;
+			m_ptrHead->m_ptrPrev = ptrObject;
+			m_ptrHead = ptrObject;
+		}*/
 	}
 
-	template<class Type, typename... ArgsType>
-	CacheErrorCode createObjectOfType(std::optional<ObjectUIDType>& uidObject, ObjectTypePtr& ptrStorageObject, const ArgsType... args)
-	{
-		ptrStorageObject = std::make_shared<ObjectType>(std::make_shared<Type>(args...));
+	m_nUsedCacheCapacity++;
 
-		ObjectUIDType uidTemp;
-		ObjectUIDType::createAddressFromVolatilePointer(uidTemp, Type::UID, reinterpret_cast<uintptr_t>(ptrStorageObject.get()));
+#ifndef __CONCURRENT__
+	flushItemsToStorage();
+#endif //__CONCURRENT__
+
+	return CacheErrorCode::Success;
+}
+
+
+template<class Type, typename... ArgsType>
+CacheErrorCode createObjectOfType(ObjectTypePtr& ptrObject, std::optional<ObjectUIDType>& uidObject, const ArgsType... args)
+{
+	std::shared_ptr<Type> ptrCoreObject = std::make_shared<Type>(args...);
+
+	ptrObject = std::make_shared<ObjectType>(Type::UID, ptrCoreObject);
+	
+
+	ObjectUIDType uidTemp;
+	ObjectUIDType::createAddressFromVolatilePointer(uidTemp, Type::UID, reinterpret_cast<uintptr_t>(ptrObject.get()));
+	ptrObject->setUID(uidTemp);
+	uidObject = uidTemp;
+
+	ObjectUIDType abc;
+	assert(ptrObject->getUID() != abc);
+
+	//uidObject = uidTemp;
+	//ptrObject->setUID(uidTemp);
+
+	//std::shared_ptr<ObjectType> ptrItem = std::make_shared<ObjectType>(*uidObject, ptrStorageObject);
+
+#ifdef __CONCURRENT__
+	std::unique_lock<std::shared_mutex> lock_cache(m_mtxCache);
+#endif //__CONCURRENT__
+
+	if (m_mpObjects.find(*uidObject) != m_mpObjects.end())
+	{
+		std::cout << "Critical State: UID for a newly created object already exist in the cache." << std::endl;
+		throw new std::logic_error(".....");   // TODO: critical log.
+
+		//std::shared_ptr<ObjectType> ptrItem = m_mpObjects[*uidObject];
+		//ptrItem->m_ptrObject = ptrStorageObject;
+		//moveToFront(ptrItem);
+	}
+	else
+	{
+		//m_mpObjects[ptrObject->m_uidSelf] = ptrObject;
+
+#ifdef __TRACK_CACHE_FOOTPRINT__
+		m_nCacheFootprint += ptrStorageObject->getMemoryFootprint();
+#endif //__TRACK_CACHE_FOOTPRINT__
+
+		//if (!m_ptrHead)
+		//{
+		//	m_ptrHead = ptrObject;
+		//	m_ptrTail = ptrObject;
+		//}
+		//else
+		//{
+		//	ptrObject->m_ptrNext = m_ptrHead;
+		//	m_ptrHead->m_ptrPrev = ptrObject;
+		//	m_ptrHead = ptrObject;
+		//}
+	}
+
+	m_nUsedCacheCapacity++;
+
+#ifndef __CONCURRENT__
+	flushItemsToStorage();
+#endif //__CONCURRENT__
+
+	return CacheErrorCode::Success;
+}
+
+//	template<class Type, typename... ArgsType>
+//	CacheErrorCode createObjectOfType(ObjectTypePtr& ptrObject, std::optional<ObjectUIDType>& uidObject, const ArgsType... args)
+//	{
+//		std::shared_ptr<Type> ptrCoreObject = std::make_shared<Type>(args...);
+//
+//		ptrObject = std::make_shared<ObjectType>(TYPE::UID, ptrCoreObject);
+//
+//		//ObjectUIDType uidTemp;
+//		//ObjectUIDType::createAddressFromVolatilePointer(uidTemp, Type::UID, reinterpret_cast<uintptr_t>(ptrStorageObject.get()));
+//
+//		uidObject = ptrObject->getUID();
+//		//ptrStorageObject->setUID(uidTemp);
+//
+//		//std::shared_ptr<ObjectType> ptrItem = std::make_shared<ObjectType>(*uidObject, ptrStorageObject);
+//
+//#ifdef __CONCURRENT__
+//		std::unique_lock<std::shared_mutex> lock_cache(m_mtxCache);
+//#endif //__CONCURRENT__
+//
+//		if (m_mpObjects.find(*uidObject) != m_mpObjects.end())
+//		{
+//			std::cout << "Critical State: UID for a newly created object already exist in the cache." << std::endl;
+//			throw new std::logic_error(".....");   // TODO: critical log.
+//
+//			//std::shared_ptr<ObjectType> ptrItem = m_mpObjects[*uidObject];
+//			//ptrItem->m_ptrObject = ptrStorageObject;
+//			//moveToFront(ptrItem);
+//		}
+//		else
+//		{
+//			m_mpObjects[ptrObject->m_uidSelf] = ptrObject;
+//
+//#ifdef __TRACK_CACHE_FOOTPRINT__
+//			m_nCacheFootprint += ptrStorageObject->getMemoryFootprint();
+//#endif //__TRACK_CACHE_FOOTPRINT__
+//
+//			if (!m_ptrHead) 
+//			{
+//				m_ptrHead = ptrObject;
+//				m_ptrTail = ptrObject;
+//			}
+//			else 
+//			{
+//				ptrObject->m_ptrNext = m_ptrHead;
+//				m_ptrHead->m_ptrPrev = ptrObject;
+//				m_ptrHead = ptrObject;
+//			}
+//		}
+//
+//#ifndef __CONCURRENT__
+//		flushItemsToStorage();
+//#endif //__CONCURRENT__
+//
+//		return CacheErrorCode::Success;
+//	}
+
+	template<class Type, typename... ArgsType>
+	CacheErrorCode createObjectOfType(std::optional<ObjectUIDType>& uidObject, ObjectTypePtr& ptrObject, const ArgsType... args)
+	{
+		ptrObject = std::make_shared<ObjectType>(Type::UID, std::make_shared<Type>(args...));
+
+		//ObjectUIDType uidTemp;
+		//ObjectUIDType::createAddressFromVolatilePointer(uidTemp, Type::UID, reinterpret_cast<uintptr_t>(ptrStorageObject.get()));
 		
+		ObjectUIDType uidTemp;
+		ObjectUIDType::createAddressFromVolatilePointer(uidTemp, Type::UID, reinterpret_cast<uintptr_t>(ptrObject.get()));
+		ptrObject->setUID(uidTemp);
 		uidObject = uidTemp;
 
-		std::shared_ptr<Item> ptrItem = std::make_shared<Item>(*uidObject, ptrStorageObject);
+		ObjectUIDType abc;
+		assert(ptrObject->getUID() != abc);
+		//std::shared_ptr<ObjectType> ptrItem = std::make_shared<ObjectType>(*uidObject, ptrStorageObject);
 
 #ifdef __CONCURRENT__
 		std::unique_lock<std::shared_mutex> lock_cache(m_mtxCache);
@@ -529,33 +672,35 @@ public:
 		{
 			std::cout << "Critical State: UID for a newly created object already exist in the cache." << std::endl;
 			throw new std::logic_error(".....");   // TODO: critical log.
-			std::shared_ptr<Item> ptrItem = m_mpObjects[*uidObject];
-			ptrItem->m_ptrObject = ptrStorageObject;
-			moveToFront(ptrItem);
+			//std::shared_ptr<ObjectType> ptrItem = m_mpObjects[*uidObject];
+			//ptrItem->m_ptrObject = ptrStorageObject;
+			//moveToFront(ptrItem);
 		}
 		else
 		{
-			m_mpObjects[ptrItem->m_uidSelf] = ptrItem;
+			//m_mpObjects[ptrObject->m_uidSelf] = ptrObject;
 
 #ifdef __TRACK_CACHE_FOOTPRINT__
 			m_nCacheFootprint += ptrStorageObject->getMemoryFootprint();
 #endif //__TRACK_CACHE_FOOTPRINT__
 
-			if (!m_ptrHead)
+			/*if (!m_ptrHead)
 			{
-				m_ptrHead = ptrItem;
-				m_ptrTail = ptrItem;
+				m_ptrHead = ptrObject;
+				m_ptrTail = ptrObject;
 			}
 			else
 			{
-				ptrItem->m_ptrNext = m_ptrHead;
-				m_ptrHead->m_ptrPrev = ptrItem;
-				m_ptrHead = ptrItem;
-			}
+				ptrObject->m_ptrNext = m_ptrHead;
+				m_ptrHead->m_ptrPrev = ptrObject;
+				m_ptrHead = ptrObject;
+			}*/
 		}
 
+		m_nUsedCacheCapacity++;
+
 #ifndef __CONCURRENT__
-		flushItemsToStorage();
+		//flushItemsToStorage();
 #endif //__CONCURRENT__
 
 		return CacheErrorCode::Success;
@@ -564,66 +709,71 @@ public:
 	template<class Type, typename... ArgsType>
 	CacheErrorCode createObjectOfType(std::optional<ObjectUIDType>& uidObject, std::shared_ptr<Type>& ptrCoreObject, const ArgsType... args)
 	{
-		ptrCoreObject = std::make_shared<Type>(args...);
-
-		std::shared_ptr<ObjectType> ptrStorageObject = std::make_shared<ObjectType>(ptrCoreObject);
-
-		uidObject = ObjectUIDType::createAddressFromVolatilePointer(Type::UID, reinterpret_cast<uintptr_t>(ptrStorageObject.get()));
-
-		std::shared_ptr<Item> ptrItem = std::make_shared<Item>(*uidObject, ptrStorageObject);
-
-#ifdef __CONCURRENT__
-		std::unique_lock<std::shared_mutex> lock_cache(m_mtxCache);
-#endif //__CONCURRENT__
-
-		if (m_mpObjects.find(*uidObject) != m_mpObjects.end())
-		{
-			std::cout << "Critical State: UID for a newly created object already exist in the cache." << std::endl;
-			throw new std::logic_error(".....");   // TODO: critical log.
-			std::shared_ptr<Item> ptrItem = m_mpObjects[*uidObject];
-			ptrItem->m_ptrObject = ptrStorageObject;
-			moveToFront(ptrItem);
-		}
-		else
-		{
-			m_mpObjects[&ptrItem->m_uidSelf] = ptrItem;
-
-#ifdef __TRACK_CACHE_FOOTPRINT__
-			m_nCacheFootprint += ptrStorageObject->getMemoryFootprint();
-#endif //__TRACK_CACHE_FOOTPRINT__
-
-			if (!m_ptrHead)
-			{
-				m_ptrHead = ptrItem;
-				m_ptrTail = ptrItem;
-			}
-			else
-			{
-				ptrItem->m_ptrNext = m_ptrHead;
-				m_ptrHead->m_ptrPrev = ptrItem;
-				m_ptrHead = ptrItem;
-			}
-		}
-
-#ifndef __CONCURRENT__
-		flushItemsToStorage();
-#endif //__CONCURRENT__
-
+//		ptrCoreObject = std::make_shared<Type>(args...);
+//
+//		std::shared_ptr<ObjectType> ptrStorageObject = std::make_shared<ObjectType>(ptrCoreObject);
+//
+//		uidObject = ObjectUIDType::createAddressFromVolatilePointer(Type::UID, reinterpret_cast<uintptr_t>(ptrStorageObject.get()));
+//
+//		std::shared_ptr<ObjectType> ptrItem = std::make_shared<ObjectType>(*uidObject, ptrStorageObject);
+//
+//#ifdef __CONCURRENT__
+//		std::unique_lock<std::shared_mutex> lock_cache(m_mtxCache);
+//#endif //__CONCURRENT__
+//
+//		if (m_mpObjects.find(*uidObject) != m_mpObjects.end())
+//		{
+//			std::cout << "Critical State: UID for a newly created object already exist in the cache." << std::endl;
+//			throw new std::logic_error(".....");   // TODO: critical log.
+//			std::shared_ptr<ObjectType> ptrItem = m_mpObjects[*uidObject];
+//			ptrItem->m_ptrObject = ptrStorageObject;
+//			moveToFront(ptrItem);
+//		}
+//		else
+//		{
+//			m_mpObjects[&ptrItem->m_uidSelf] = ptrItem;
+//
+//#ifdef __TRACK_CACHE_FOOTPRINT__
+//			m_nCacheFootprint += ptrStorageObject->getMemoryFootprint();
+//#endif //__TRACK_CACHE_FOOTPRINT__
+//
+//			if (!m_ptrHead)
+//			{
+//				m_ptrHead = ptrItem;
+//				m_ptrTail = ptrItem;
+//			}
+//			else
+//			{
+//				ptrItem->m_ptrNext = m_ptrHead;
+//				m_ptrHead->m_ptrPrev = ptrItem;
+//				m_ptrHead = ptrItem;
+//			}
+//		}
+//
+//#ifndef __CONCURRENT__
+//		flushItemsToStorage();
+//#endif //__CONCURRENT__
+//
 		return CacheErrorCode::Success;
 	}
 
 	void getCacheState(size_t& nObjectsLinkedList, size_t& nObjectsInMap)
 	{
 		nObjectsLinkedList = 0;
-		std::shared_ptr<Item> ptrItem = m_ptrHead;
+		std::shared_ptr<ObjectType> ptrItem = m_ptrHead;
 
 		while (ptrItem != nullptr)
 		{
+			if (ptrItem.use_count() > 4)
+			{
+				std::cout << ptrItem.use_count() << std::endl;
+			}
+
 			nObjectsLinkedList++;
 			ptrItem = ptrItem->m_ptrNext;
 		} 
 
-		nObjectsInMap = m_mpObjects.size();
+		//nObjectsInMap = m_mpObjects.size();
 	}
 
 	CacheErrorCode flush()
@@ -635,7 +785,7 @@ public:
 	}
 
 private:
-	void moveToTail(std::shared_ptr<Item> tail, std::shared_ptr<Item> nodeToMove) 
+	void moveToTail(std::shared_ptr<ObjectType> tail, std::shared_ptr<ObjectType> nodeToMove)
 	{
 		if (tail == nullptr || nodeToMove == nullptr)
 		{
@@ -669,7 +819,7 @@ private:
 		}
 	}
 
-	void interchangeWithTail(std::shared_ptr<Item> currentNode) {
+	void interchangeWithTail(std::shared_ptr<ObjectType> currentNode) {
 		if (currentNode == nullptr || currentNode == m_ptrTail) 
 		{
 			return;
@@ -697,8 +847,15 @@ private:
 		m_ptrTail = currentNode;
 	}
 
-	inline void moveToFront(std::shared_ptr<Item> ptrItem)
+	inline void moveToFront(std::shared_ptr<ObjectType> ptrItem)
 	{
+		if (!m_ptrHead)
+		{
+			m_ptrHead = ptrItem;
+			m_ptrTail = ptrItem;
+			return;
+		}
+
 		if (ptrItem == m_ptrHead)
 		{
 			return;
@@ -722,14 +879,20 @@ private:
 		ptrItem->m_ptrPrev = nullptr;
 		ptrItem->m_ptrNext = m_ptrHead;
 
-		if (m_ptrHead) 
-		{
+		//if (m_ptrHead) 
+		//{
 			m_ptrHead->m_ptrPrev = ptrItem;
-		}
+		//}
 		m_ptrHead = ptrItem;
+
+		//if (!m_ptrTail)
+		//{
+		//	//m_ptrHead = ptrItem;
+		//	m_ptrTail = ptrItem;
+		//}
 	}
 
-	inline void moveToFront(const std::vector<std::shared_ptr<Item>>& itemList)
+	inline void moveToFront(const std::vector<std::shared_ptr<ObjectType>>& itemList)
 	{
 		if (itemList.empty())
 		{
@@ -799,7 +962,7 @@ private:
 		}
 	}
 
-	inline void removeFromLRU(std::shared_ptr<Item> ptrItem)
+	inline void removeFromLRU(std::shared_ptr<ObjectType> ptrItem)
 	{
 		if (ptrItem->m_ptrPrev != nullptr) 
 		{
@@ -954,9 +1117,9 @@ private:
 
 		vtObjects.clear();
 #else //__CONCURRENT__
-		while (m_mpObjects.size() > m_nCacheCapacity)
+		while (m_nUsedCacheCapacity > m_nCacheCapacity)
 		{
-			if (m_ptrTail->m_ptrObject.use_count() > 1)
+			if (m_ptrTail.use_count() > 3)
 			{
 				/* Info:
 				 * Should proceed with the preceeding one?
@@ -965,16 +1128,22 @@ private:
 				break;
 			}
 
-			if (m_mpUIDUpdates.size() > 0)
+			if (m_ptrTail.use_count() == 3)
 			{
-				m_ptrCallback->applyExistingUpdates(m_ptrTail->m_ptrObject, m_mpUIDUpdates);
+				//std::cout << ";;" << std::endl;
+				//m_ptrTail->unhook_();
 			}
 
-			if (m_ptrTail->m_ptrObject->getDirtyFlag())
+			if (m_mpUIDUpdates.size() > 0)
+			{
+				m_ptrCallback->applyExistingUpdates(m_ptrTail, m_mpUIDUpdates);
+			}
+
+			if (m_ptrTail->getDirtyFlag())
 			{
 
 				ObjectUIDType uidUpdated;
-				if (m_ptrStorage->addObject(m_ptrTail->m_uidSelf, m_ptrTail->m_ptrObject, uidUpdated) != CacheErrorCode::Success)
+				if (m_ptrStorage->addObject(m_ptrTail->m_uidSelf, m_ptrTail, uidUpdated) != CacheErrorCode::Success)
 				{
 					std::cout << "Critical State: Failed to add object to Storage." << std::endl;
 					throw new std::logic_error(".....");   // TODO: critical log.
@@ -982,16 +1151,17 @@ private:
 
 				if (m_mpUIDUpdates.find(m_ptrTail->m_uidSelf) != m_mpUIDUpdates.end())
 				{
+					auto a = m_mpUIDUpdates[m_ptrTail ->m_uidSelf];
 					std::cout << "Critical State: Can't proceed with the flushItemsToStorage operations as object already exists in Updates' list." << std::endl;
 					throw new std::logic_error(".....");   // TODO: critical log.
 				}
 
-				m_mpUIDUpdates[m_ptrTail->m_uidSelf] = std::make_pair(uidUpdated, m_ptrTail->m_ptrObject);
+				m_mpUIDUpdates[m_ptrTail->m_uidSelf] = std::make_pair(uidUpdated, m_ptrTail);
 			}
 
-			m_mpObjects.erase(m_ptrTail->m_uidSelf);
+			//m_mpObjects.erase(m_ptrTail->m_uidSelf);
 
-			std::shared_ptr<Item> ptrTemp = m_ptrTail;
+			std::shared_ptr<ObjectType> ptrTemp = m_ptrTail;
 
 			m_ptrTail = m_ptrTail->m_ptrPrev;
 
@@ -1003,128 +1173,130 @@ private:
 			{
 				m_ptrHead = nullptr;
 			}
-
+			ptrTemp->unhook_();
 			ptrTemp.reset();
+
+			m_nUsedCacheCapacity--;
 		}
 #endif //__CONCURRENT__
 	}
 
 	inline void flushAllItemsToStorage()
 	{
-		std::vector<std::pair<ObjectUIDType, std::pair<std::optional<ObjectUIDType>, std::shared_ptr<ObjectType>>>> vtObjects;
-
-#ifdef __CONCURRENT__
-		std::unique_lock<std::shared_mutex> lock_cache(m_mtxCache);
-#endif //__CONCURRENT__
-
-		for (uint32_t idx = 0, idxend = m_mpObjects.size(); idx < idxend; idx++)
-		{
-			if (m_ptrTail->m_ptrObject.use_count() > 1)
-			{
-				std::cout << "Critical State: Can't proceed with the flushAllItemsToStorage operations as an object is in use." << std::endl;
-				throw new std::logic_error(".....");   // TODO: critical log.
-			}
-
-			if (!m_ptrTail->m_ptrObject->tryLockObject())
-			{
-				std::cout << "Critical State: Can't proceed with the flushAllItemsToStorage operations as lock can't be acquired on object." << std::endl;
-				throw new std::logic_error(".....");   // TODO: critical log.
-			}
-			else
-			{
-				m_ptrTail->m_ptrObject->unlockObject();
-			}
-
-			std::shared_ptr<Item> ptrItemToFlush = m_ptrTail;
-
-			vtObjects.push_back(std::make_pair(ptrItemToFlush->m_uidSelf, std::make_pair(std::nullopt, ptrItemToFlush->m_ptrObject)));
-
-#ifdef __TRACK_CACHE_FOOTPRINT__
-			m_nCacheFootprint -= ptrItemToFlush->m_ptrObject->getMemoryFootprint();
-#endif //__TRACK_CACHE_FOOTPRINT__
-
-			m_mpObjects.erase(ptrItemToFlush->m_uidSelf);
-
-			m_ptrTail = ptrItemToFlush->m_ptrPrev;
-
-			ptrItemToFlush->m_ptrPrev = nullptr;
-			ptrItemToFlush->m_ptrNext = nullptr;
-
-			if (m_ptrTail)
-			{
-				m_ptrTail->m_ptrNext = nullptr;
-			}
-			else
-			{
-				m_ptrHead = nullptr;
-			}
-
-			ptrItemToFlush.reset();
-		}
-
-#ifdef __CONCURRENT__
-		std::unique_lock<std::shared_mutex> lock_storage(m_mtxStorage);
-
-		lock_cache.unlock();
-#endif //__CONCURRENT__
-
-		if (m_mpUIDUpdates.size() > 0)
-		{
-			m_ptrCallback->applyExistingUpdates(vtObjects, m_mpUIDUpdates);
-		}
-
-		// TODO: ensure that no other thread should touch the storage related params..
-		size_t nNewOffset = 0;
-
-		m_ptrCallback->prepareFlush(vtObjects, m_ptrStorage->getNextAvailableBlockOffset(), nNewOffset, m_ptrStorage->getBlockSize(), m_ptrStorage->getStorageType());
-
-		//m_ptrCallback->prepareFlush(vtObjects, nPos, m_ptrStorage->getBlockSize(), m_ptrStorage->getMediaType());
-
-		for (auto itObject = vtObjects.begin(); itObject != vtObjects.end(); itObject++)
-		{
-			if ((*itObject).second.second.use_count() != 1)
-			{
-				std::cout << "Critical State: Can't proceed with the flushAllItemsToStorage operations as an object is in use." << std::endl;
-				throw new std::logic_error(".....");   // TODO: critical log.
-			}
-
-			if (m_mpUIDUpdates.find((*itObject).first) != m_mpUIDUpdates.end())
-			{
-				std::cout << "Critical State: Can't proceed with the flushAllItemsToStorage operations as object already exists in Updates' list." << std::endl;
-				throw new std::logic_error(".....");   // TODO: critical log.
-			}
-
-			m_mpUIDUpdates[(*itObject).first] = std::make_pair(std::nullopt, (*itObject).second.second);
-		}
-
-#ifdef __CONCURRENT__
-		lock_storage.unlock();
-#endif //__CONCURRENT__
-
-		m_ptrStorage->addObjects(vtObjects, nNewOffset);
-
-#ifdef __CONCURRENT__
-		std::unique_lock<std::shared_mutex> relock_storage(m_mtxStorage);
-#endif //__CONCURRENT__
-
-		for (auto itObject = vtObjects.begin(); itObject != vtObjects.end(); itObject++)
-		{
-			if (m_mpUIDUpdates.find((*itObject).first) == m_mpUIDUpdates.end())
-			{
-				std::cout << "Critical State: Can't proceed with the flushAllItemsToStorage operations as object does not exists in Updates' list." << std::endl;
-				throw new std::logic_error(".....");   // TODO: critical log.
-			}
-
-			m_mpUIDUpdates[(*itObject).first].first = (*itObject).second.first;
-		}
-
-#ifdef __CONCURRENT__
-		relock_storage.unlock();
-
-		m_cvUIDUpdates.notify_all();
-#endif //__CONCURRENT__
-
-		vtObjects.clear();
+//		std::vector<std::pair<ObjectUIDType, std::pair<std::optional<ObjectUIDType>, std::shared_ptr<ObjectType>>>> vtObjects;
+//
+//#ifdef __CONCURRENT__
+//		std::unique_lock<std::shared_mutex> lock_cache(m_mtxCache);
+//#endif //__CONCURRENT__
+//
+//		for (uint32_t idx = 0, idxend = m_mpObjects.size(); idx < idxend; idx++)
+//		{
+//			if (m_ptrTail->m_ptrObject.use_count() > 1)
+//			{
+//				std::cout << "Critical State: Can't proceed with the flushAllItemsToStorage operations as an object is in use." << std::endl;
+//				throw new std::logic_error(".....");   // TODO: critical log.
+//			}
+//
+//			if (!m_ptrTail->m_ptrObject->tryLockObject())
+//			{
+//				std::cout << "Critical State: Can't proceed with the flushAllItemsToStorage operations as lock can't be acquired on object." << std::endl;
+//				throw new std::logic_error(".....");   // TODO: critical log.
+//			}
+//			else
+//			{
+//				m_ptrTail->m_ptrObject->unlockObject();
+//			}
+//
+//			std::shared_ptr<ObjectType> ptrItemToFlush = m_ptrTail;
+//
+//			vtObjects.push_back(std::make_pair(ptrItemToFlush->m_uidSelf, std::make_pair(std::nullopt, ptrItemToFlush->m_ptrObject)));
+//
+//#ifdef __TRACK_CACHE_FOOTPRINT__
+//			m_nCacheFootprint -= ptrItemToFlush->m_ptrObject->getMemoryFootprint();
+//#endif //__TRACK_CACHE_FOOTPRINT__
+//
+//			m_mpObjects.erase(ptrItemToFlush->m_uidSelf);
+//
+//			m_ptrTail = ptrItemToFlush->m_ptrPrev;
+//
+//			ptrItemToFlush->m_ptrPrev = nullptr;
+//			ptrItemToFlush->m_ptrNext = nullptr;
+//
+//			if (m_ptrTail)
+//			{
+//				m_ptrTail->m_ptrNext = nullptr;
+//			}
+//			else
+//			{
+//				m_ptrHead = nullptr;
+//			}
+//
+//			ptrItemToFlush.reset();
+//		}
+//
+//#ifdef __CONCURRENT__
+//		std::unique_lock<std::shared_mutex> lock_storage(m_mtxStorage);
+//
+//		lock_cache.unlock();
+//#endif //__CONCURRENT__
+//
+//		if (m_mpUIDUpdates.size() > 0)
+//		{
+//			m_ptrCallback->applyExistingUpdates(vtObjects, m_mpUIDUpdates);
+//		}
+//
+//		// TODO: ensure that no other thread should touch the storage related params..
+//		size_t nNewOffset = 0;
+//
+//		m_ptrCallback->prepareFlush(vtObjects, m_ptrStorage->getNextAvailableBlockOffset(), nNewOffset, m_ptrStorage->getBlockSize(), m_ptrStorage->getStorageType());
+//
+//		//m_ptrCallback->prepareFlush(vtObjects, nPos, m_ptrStorage->getBlockSize(), m_ptrStorage->getMediaType());
+//
+//		for (auto itObject = vtObjects.begin(); itObject != vtObjects.end(); itObject++)
+//		{
+//			if ((*itObject).second.second.use_count() != 1)
+//			{
+//				std::cout << "Critical State: Can't proceed with the flushAllItemsToStorage operations as an object is in use." << std::endl;
+//				throw new std::logic_error(".....");   // TODO: critical log.
+//			}
+//
+//			if (m_mpUIDUpdates.find((*itObject).first) != m_mpUIDUpdates.end())
+//			{
+//				std::cout << "Critical State: Can't proceed with the flushAllItemsToStorage operations as object already exists in Updates' list." << std::endl;
+//				throw new std::logic_error(".....");   // TODO: critical log.
+//			}
+//
+//			m_mpUIDUpdates[(*itObject).first] = std::make_pair(std::nullopt, (*itObject).second.second);
+//		}
+//
+//#ifdef __CONCURRENT__
+//		lock_storage.unlock();
+//#endif //__CONCURRENT__
+//
+//		m_ptrStorage->addObjects(vtObjects, nNewOffset);
+//
+//#ifdef __CONCURRENT__
+//		std::unique_lock<std::shared_mutex> relock_storage(m_mtxStorage);
+//#endif //__CONCURRENT__
+//
+//		for (auto itObject = vtObjects.begin(); itObject != vtObjects.end(); itObject++)
+//		{
+//			if (m_mpUIDUpdates.find((*itObject).first) == m_mpUIDUpdates.end())
+//			{
+//				std::cout << "Critical State: Can't proceed with the flushAllItemsToStorage operations as object does not exists in Updates' list." << std::endl;
+//				throw new std::logic_error(".....");   // TODO: critical log.
+//			}
+//
+//			m_mpUIDUpdates[(*itObject).first].first = (*itObject).second.first;
+//		}
+//
+//#ifdef __CONCURRENT__
+//		relock_storage.unlock();
+//
+//		m_cvUIDUpdates.notify_all();
+//#endif //__CONCURRENT__
+//
+//		vtObjects.clear();
 	}
 
 	inline void flushDataItemsToStorage()
@@ -1135,27 +1307,28 @@ private:
 		std::unique_lock<std::shared_mutex> lock_cache(m_mtxCache);
 #endif //__CONCURRENT__
 
-		std::shared_ptr<Item> ptrItemToFlush = m_ptrTail;
+		std::shared_ptr<ObjectType> ptrItemToFlush = m_ptrTail;
 
-		for (uint32_t idx = 0, idxend = m_mpObjects.size(); idx < idxend; idx++)
+		while (m_nUsedCacheCapacity > 0)
 		{
-			if (ptrItemToFlush->m_ptrObject.use_count() > 1)
+			//std::cout << ptrItemToFlush.use_count() << " ,";
+			if (ptrItemToFlush.use_count() > 4)
 			{
 				std::cout << "Critical State: Can't proceed with the flushDatatemsToStorage operations as an object is in use." << std::endl;
-				throw new std::logic_error(".....");   // TODO: critical log.
+				//throw new std::logic_error(".....");   // TODO: critical log.
 			}
 
-			if (!ptrItemToFlush->m_ptrObject->tryLockObject())
+			if (!ptrItemToFlush->tryLockObject())
 			{
 				std::cout << "Critical State: Can't proceed with the flushDataItemsToStorage operations as lock can't be acquired on object." << std::endl;
 				throw new std::logic_error(".....");   // TODO: critical log.
 			}
 			else
 			{
-				ptrItemToFlush->m_ptrObject->unlockObject();
+				ptrItemToFlush->unlockObject();
 			}
 
-			vtObjects.push_back(std::make_pair(ptrItemToFlush->m_uidSelf, std::make_pair(std::nullopt, ptrItemToFlush->m_ptrObject)));
+			vtObjects.push_back(std::make_pair(ptrItemToFlush->m_uidSelf, std::make_pair(std::nullopt, ptrItemToFlush)));
 
 #ifdef __TRACK_CACHE_FOOTPRINT__
 			m_nCacheFootprint -= ptrItemToFlush->m_ptrObject->getMemoryFootprint();
@@ -1169,9 +1342,9 @@ private:
 			}
 			else
 			{
-				std::shared_ptr<Item> ptrTemp = ptrItemToFlush->m_ptrPrev;
+				std::shared_ptr<ObjectType> ptrTemp = ptrItemToFlush->m_ptrPrev;
 
-				m_mpObjects.erase(ptrItemToFlush->m_uidSelf);
+				//m_mpObjects.erase(ptrItemToFlush->m_uidSelf);
 
 				if (m_ptrTail == ptrItemToFlush)
 				{
@@ -1189,6 +1362,8 @@ private:
 						m_ptrHead = nullptr;
 					}
 
+					ptrItemToFlush->unhook_();
+
 					ptrItemToFlush.reset();
 				}
 				else
@@ -1197,11 +1372,15 @@ private:
 					ptrItemToFlush->m_ptrNext->m_ptrPrev = ptrItemToFlush->m_ptrPrev;
 					ptrItemToFlush->m_ptrPrev->m_ptrNext = ptrItemToFlush->m_ptrPrev;
 
+					ptrItemToFlush->unhook_();
+
 					ptrItemToFlush.reset();
 				}
 
 				ptrItemToFlush = ptrTemp;
 			}
+
+			m_nUsedCacheCapacity--;
 		}
 
 #ifdef __CONCURRENT__
@@ -1218,26 +1397,26 @@ private:
 		// TODO: ensure that no other thread should touch the storage related params..
 		size_t nNewOffset = 0;
 
-		m_ptrCallback->prepareFlush(vtObjects, m_ptrStorage->getNextAvailableBlockOffset(), nNewOffset, m_ptrStorage->getBlockSize(), m_ptrStorage->getStorageType());
+		m_ptrCallback->prepareFlush(vtObjects, m_ptrStorage->getNextAvailableBlockOffset(), nNewOffset, m_ptrStorage->getBlockSize(), m_ptrStorage->getStorageType(), m_mpUIDUpdates);
 
 		//m_ptrCallback->prepareFlush(vtObjects, nPos, m_ptrStorage->getBlockSize(), m_ptrStorage->getMediaType());
 
-		for (auto itObject = vtObjects.begin(); itObject != vtObjects.end(); itObject++)
-		{
-			if ((*itObject).second.second.use_count() != 1)
-			{
-				std::cout << "Critical State: Can't proceed with the flushDatatemsToStorage operations as an object is in use." << std::endl;
-				throw new std::logic_error(".....");   // TODO: critical log.
-			}
+		//for (auto itObject = vtObjects.begin(); itObject != vtObjects.end(); itObject++)
+		//{
+		//	//if ((*itObject).second.second.use_count() != 1)
+		//	{
+		//		//std::cout << "Critical State: Can't proceed with the flushDatatemsToStorage operations as an object is in use." << std::endl;
+		//		//throw new std::logic_error(".....");   // TODO: critical log.
+		//	}
 
-			if (m_mpUIDUpdates.find((*itObject).first) != m_mpUIDUpdates.end())
-			{
-				std::cout << "Critical State: Can't proceed with the flushDataItemsToStorage operations as object already exists in Updates' list." << std::endl;
-				throw new std::logic_error(".....");   // TODO: critical log.
-			}
+		//	if (m_mpUIDUpdates.find((*itObject).first) != m_mpUIDUpdates.end())
+		//	{
+		//		std::cout << "Critical State: Can't proceed with the flushDataItemsToStorage operations as object already exists in Updates' list." << std::endl;
+		//		throw new std::logic_error(".....");   // TODO: critical log.
+		//	}
 
-			m_mpUIDUpdates[(*itObject).first] = std::make_pair(std::nullopt, (*itObject).second.second);
-		}
+		//	m_mpUIDUpdates[(*itObject).first] = std::make_pair(std::nullopt, (*itObject).second.second);
+		//}
 
 #ifdef __CONCURRENT__
 		lock_storage.unlock();
@@ -1249,16 +1428,16 @@ private:
 		std::unique_lock<std::shared_mutex> relock_storage(m_mtxStorage);
 #endif //__CONCURRENT__
 
-		for (auto itObject = vtObjects.begin(); itObject != vtObjects.end(); itObject++)
-		{
-			if (m_mpUIDUpdates.find((*itObject).first) == m_mpUIDUpdates.end())
-			{
-				std::cout << "Critical State: Can't proceed with the flushDataItemsToStorage operations as object does not exists in Updates' list." << std::endl;
-				throw new std::logic_error(".....");   // TODO: critical log.
-			}
+		//for (auto itObject = vtObjects.begin(); itObject != vtObjects.end(); itObject++)
+		//{
+		//	if (m_mpUIDUpdates.find((*itObject).first) == m_mpUIDUpdates.end())
+		//	{
+		//		std::cout << "Critical State: Can't proceed with the flushDataItemsToStorage operations as object does not exists in Updates' list." << std::endl;
+		//		throw new std::logic_error(".....");   // TODO: critical log.
+		//	}
 
-			m_mpUIDUpdates[(*itObject).first].first = (*itObject).second.first;
-		}
+		//	m_mpUIDUpdates[(*itObject).first].first = (*itObject).second.first;
+		//}
 
 #ifdef __CONCURRENT__
 		relock_storage.unlock();
@@ -1276,7 +1455,7 @@ private:
 
 		std::unique_lock<std::shared_mutex> lock_cache(m_mtxCache);
 
-		std::shared_ptr<Item> ptrItemToFlush = m_ptrTail;
+		std::shared_ptr<ObjectType> ptrItemToFlush = m_ptrTail;
 
 		for (uint32_t idx = 0, idxend = m_mpObjects.size(); idx < idxend; idx++)
 		{
@@ -1395,7 +1574,7 @@ private:
 
 			m_mpObjects.erase(m_ptrTail->m_uidSelf);
 
-			std::shared_ptr<Item> ptrTemp = m_ptrTail;
+			std::shared_ptr<ObjectType> ptrTemp = m_ptrTail;
 
 			m_ptrTail = m_ptrTail->m_ptrPrev;
 
@@ -1440,7 +1619,8 @@ public:
 	}
 
 	void prepareFlush(std::vector<std::pair<ObjectUIDType, std::pair<std::optional<ObjectUIDType>, std::shared_ptr<ObjectType>>>>& vtNodes
-		, size_t nOffset, size_t& nNewOffset, size_t nBlockSize, ObjectUIDType::StorageMedia nMediaType)
+		, size_t nOffset, size_t& nNewOffset, size_t nBlockSize, ObjectUIDType::StorageMedia nMediaType
+		, std::unordered_map<ObjectUIDType, std::pair<std::optional<ObjectUIDType>, std::shared_ptr<ObjectType>>>& mpUIDUpdates)
 	{
 	}
 #endif //__TREE_WITH_CACHE__
