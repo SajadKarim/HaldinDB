@@ -826,169 +826,212 @@
 //        test_for_threaded();
 //    }
 //}
-//
-//struct CHAR16 {
-//    char data[16];
-//
-//    // Default constructor (trivial)
-//    CHAR16() = default;
-//
-//    // Parameterized constructor
-//    CHAR16(const char* str) {
-//        std::memset(data, 0, sizeof(data));
-//#ifndef _MSC_VER
-//        strncpy(data, str, sizeof(data) - 1);
-//#else _MSC_VER
-//        strncpy_s(data, sizeof(data), str, sizeof(data) - 1); 
-//#endif _MSC_VER
-//    }
-//
-//    // Define the < operator for comparison
-//    bool operator<(const CHAR16& other) const {
-//        return std::strncmp(data, other.data, sizeof(data)) < 0;
-//    }
-//
-//    // Define the == operator for comparison
-//    bool operator==(const CHAR16& other) const {
-//        return std::strncmp(data, other.data, sizeof(data)) == 0;
-//    }
-//};
-//
-//
-//
-//template <typename BPlusStoreType>
-//void fptree_test(BPlusStoreType* ptrTree, size_t nMaxNumber)
-//{
-//    //std::ifstream file("/home/skarim/Reproducibility/benchmarks/microbenchmarks/values_int.dat"); 
-//    std::ifstream file("/home/skarim/Reproducibility/benchmarks/microbenchmarks/values_string.dat"); 
-//
-//    std::vector<CHAR16> random_numbers;
-//    //int64_t number; 
-//    std::string line;
-//    
-//    while (std::getline(file, line)) 
-//    { 
-//        CHAR16 itm;
-//        std::memcpy(&itm.data, line.c_str(), 15);
-//        itm.data[15] = '\0';
-////	    number = std::stoull(line);
-//        random_numbers.push_back(itm);
-//    } 
-//    
-//    //r (const auto &num : random_numbers)
-//    //
-//    //  std::cout << num << std::endl; 
-//   //
-//	std::cout << "---" <<  random_numbers.size() << std::endl;
-//
-//    //std::vector<int> random_numbers(nMaxNumber);//50000000);
-//    //std::iota(random_numbers.begin(), random_numbers.end(), 1); // Fill vector with 1 to 5,000,000    
-//    //std::random_device rd; // Obtain a random number from hardware
-//    //std::mt19937 eng(rd()); // Seed the generator
-//    //std::shuffle(random_numbers.begin(), random_numbers.end(), eng);
-//
-//    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-//
-//    for (size_t nCntr = 0; nCntr < nMaxNumber; nCntr++)
+
+struct CHAR16 {
+    char data[16];
+
+    // Default constructor (trivial)
+    CHAR16() = default;
+
+    // Parameterized constructor
+    CHAR16(const char* str) {
+        std::memset(data, 0, sizeof(data));
+#ifndef _MSC_VER
+        strncpy(data, str, sizeof(data) - 1);
+#else _MSC_VER
+        strncpy_s(data, sizeof(data), str, sizeof(data) - 1); 
+#endif _MSC_VER
+    }
+
+    // Define the < operator for comparison
+    bool operator<(const CHAR16& other) const {
+        return std::strncmp(data, other.data, sizeof(data)) < 0;
+    }
+
+    // Define the == operator for comparison
+    bool operator==(const CHAR16& other) const {
+        return std::strncmp(data, other.data, sizeof(data)) == 0;
+    }
+};
+
+
+
+template <typename BPlusStoreType>
+void fptree_test(BPlusStoreType* ptrTree, size_t nMaxNumber)
+{
+    //std::ifstream file("/home/skarim/Reproducibility/benchmarks/microbenchmarks/values_int.dat"); 
+    std::ifstream file("/home/skarim/Reproducibility/benchmarks/microbenchmarks/values_string.dat"); 
+
+    std::vector<CHAR16> random_numbers;
+    //int64_t number; 
+    std::string line;
+    
+    while (std::getline(file, line)) 
+    { 
+        CHAR16 itm;
+        std::memcpy(&itm.data, line.c_str(), 15);
+        itm.data[15] = '\0';
+//	    number = std::stoull(line);
+        random_numbers.push_back(itm);
+    } 
+    
+    //r (const auto &num : random_numbers)
+    //
+    //  std::cout << num << std::endl; 
+   //
+	std::cout << "---" <<  random_numbers.size() << std::endl;
+
+    //std::vector<int> random_numbers(nMaxNumber);//50000000);
+    //std::iota(random_numbers.begin(), random_numbers.end(), 1); // Fill vector with 1 to 5,000,000    
+    //std::random_device rd; // Obtain a random number from hardware
+    //std::mt19937 eng(rd()); // Seed the generator
+    //std::shuffle(random_numbers.begin(), random_numbers.end(), eng);
+
+    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
+    for (size_t nCntr = 0; nCntr < nMaxNumber; nCntr++)
+    {
+        ptrTree->insert(random_numbers[nCntr], 0);
+    }
+
+    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+    std::cout
+        << ">> insert [Time: "
+        << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "us"
+        << ", " << std::chrono::duration_cast<std::chrono::nanoseconds> (end - begin).count() << "ns]"
+        << std::endl;
+ //return;
+    std::this_thread::sleep_for(std::chrono::seconds(10));
+
+    begin = std::chrono::steady_clock::now();
+
+    ptrTree->flush();
+
+    end = std::chrono::steady_clock::now();
+    std::cout
+        << ">> flush [Time: "
+        << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "us"
+        << ", " << std::chrono::duration_cast<std::chrono::nanoseconds> (end - begin).count() << "ns]"
+        << std::endl;
+
+    std::this_thread::sleep_for(std::chrono::seconds(10));
+
+    begin = std::chrono::steady_clock::now();
+
+    for (size_t nCntr = 0; nCntr < nMaxNumber; nCntr++)
+    {
+        int64_t nValue = 0;
+        ErrorCode ec = ptrTree->search(random_numbers[nCntr], nValue);
+
+        //assert(nValue == random_numbers[nCntr]);
+    }
+
+    end = std::chrono::steady_clock::now();
+    std::cout
+        << ">> search [Time: "
+        << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "us"
+        << ", " << std::chrono::duration_cast<std::chrono::nanoseconds> (end - begin).count() << "ns]"
+        << std::endl;
+
+    std::this_thread::sleep_for(std::chrono::seconds(10));
+return;
+//ptrTree->flush();
+
+    begin = std::chrono::steady_clock::now();
+
+    for (size_t nCntr = 0; nCntr < nMaxNumber; nCntr++)
+    {
+        int64_t nValue = 0;
+        //ErrorCode ec = ptrTree->remove(random_numbers[nCntr]);
+
+        //assert(nValue == random_numbers[nCntr]);
+    }
+
+    end = std::chrono::steady_clock::now();
+    std::cout
+        << ">> delete [Time: "
+        << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "us"
+        << ", " << std::chrono::duration_cast<std::chrono::nanoseconds> (end - begin).count() << "ns]"
+        << std::endl;
+}
+
+void fptree_bm()
+{
+#ifdef __TREE_WITH_CACHE__
+    typedef CHAR16 KeyType;
+    typedef int64_t ValueType;
+
+    typedef ObjectFatUID ObjectUIDType;
+
+    //typedef DataNodeROpt<KeyType, ValueType, ObjectUIDType, TYPE_UID::DATA_NODE_INT_INT> DataNodeType;
+    //typedef IndexNodeROpt<KeyType, ValueType, ObjectUIDType, DataNodeType, TYPE_UID::INDEX_NODE_INT_INT> IndexNodeType;
+
+    //typedef DataNode<KeyType, ValueType, ObjectUIDType, TYPE_UID::DATA_NODE_INT_INT> DataNodeType;
+    //typedef IndexNode<KeyType, ValueType, ObjectUIDType, DataNodeType, TYPE_UID::INDEX_NODE_INT_INT> IndexNodeType;
+    typedef DataNode<KeyType, ValueType, ObjectUIDType, TYPE_UID::DATA_NODE_INT_INT> DataNodeType;
+    typedef IndexNode<KeyType, ValueType, ObjectUIDType, DataNodeType, TypeMarshaller, TYPE_UID::INDEX_NODE_INT_INT> IndexNodeType;
+
+    typedef LRUCacheObject<ObjectUIDType, TypeMarshaller, DataNodeType, IndexNodeType> ObjectType;
+    //typedef LRUCacheObject<TypeMarshaller, DataNodeType, IndexNodeType> ObjectType;
+    typedef IFlushCallback<ObjectUIDType, ObjectType> ICallback;
+
+    typedef BPlusStore<ICallback, KeyType, ValueType, LRUCache<ICallback, FileStorage<ICallback, ObjectUIDType, LRUCacheObject, TypeMarshaller, DataNodeType, IndexNodeType>>> BPlusStoreType;
+    //BPlusStoreType ptrTree(24, 1024, 512, 10ULL * 1024 * 1024 * 1024, FILE_STORAGE_PATH);
+
+    //typedef BPlusStore<ICallback, KeyType, ValueType, LRUCache<ICallback, VolatileStorage<ICallback, ObjectUIDType, LRUCacheObject, TypeMarshaller, DataNodeType, IndexNodeType>>> BPlusStoreType;
+    //BPlusStoreType ptrTree(24, 1024, 4096, 10ULL * 1024 * 1024 * 1024);
+
+    //typedef BPlusStore<ICallback, KeyType, ValueType, LRUCache<ICallback, PMemStorage<ICallback, ObjectUIDType, LRUCacheObject, TypeMarshaller, DataNodeType, IndexNodeType>>> BPlusStoreType;
+	
+    //typedef BPlusStore<KeyType, ValueType, NoCache<ObjectUIDType, NoCacheObject, DataNodeType, IndexNodeType>> BPlusStoreType;
+    
+    // Single-threaded test
+    {
+        size_t nMaxNumber = 500000;
+	
+        for (size_t nDegree = 32; nDegree < 4000; nDegree = nDegree + 10)
+        {
+		//break;
+            size_t nInternalNodeSize = (nDegree - 1) * sizeof(ValueType) + nDegree * sizeof(ObjectUIDType) + sizeof(int*);
+            size_t nTotalInternalNodes = nMaxNumber / nDegree;
+            //size_t nMemoryOfNodes = nTotalNodes * nNodeSize;
+            //size_t nMemoryOfData = nMaxNumber * sizeof(KeyType);
+            size_t nTotalMemory = nTotalInternalNodes * nInternalNodeSize;
+            size_t nTotalMemoryInMB = nTotalMemory / (1024 * 1024);
+
+            size_t nBlockSize = nInternalNodeSize > 256 ? 256 : 128;
+
+            std::cout
+                << "Order = " << nDegree
+                << ", Total IN (n) = " << nTotalInternalNodes
+                << ", Total Memory (MB) = " << nTotalMemoryInMB
+                << ", Block Size = " << nBlockSize
+                << std::endl;
+
+            for (size_t nCntr = 0; nCntr < 1; nCntr++)
+            {
+                BPlusStoreType ptrTree(nDegree, nTotalMemoryInMB, nBlockSize, 25ULL * 1024 * 1024 * 1024, FILE_STORAGE_PATH);
+                //BPlusStoreType ptrTree(nDegree, nTotalInternalNodes, nBlockSize, 120ULL * 1024 * 1024 * 1024, PMEM_STORAGE_PATH_II);
+                ptrTree.init<DataNodeType>();
+
+                std::cout << "Iteration = " << nCntr + 1 << std::endl;
+                fptree_test<BPlusStoreType>(&ptrTree, nMaxNumber);
+                std::this_thread::sleep_for(std::chrono::seconds(10));
+                //break;
+            }
+	    std::cout << std::endl;
+            //std::this_thread::sleep_for(std::chrono::seconds(10));
+            //break;
+        }
+    }
+return;
+//#ifdef __CONCURRENT__
+//    // Multi-threaded test
 //    {
-//        ptrTree->insert(random_numbers[nCntr], 0);
-//    }
-//
-//    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-//    std::cout
-//        << ">> insert [Time: "
-//        << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "us"
-//        << ", " << std::chrono::duration_cast<std::chrono::nanoseconds> (end - begin).count() << "ns]"
-//        << std::endl;
-// //return;
-//    std::this_thread::sleep_for(std::chrono::seconds(10));
-//
-//    begin = std::chrono::steady_clock::now();
-//
-//    ptrTree->flush();
-//
-//    end = std::chrono::steady_clock::now();
-//    std::cout
-//        << ">> flush [Time: "
-//        << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "us"
-//        << ", " << std::chrono::duration_cast<std::chrono::nanoseconds> (end - begin).count() << "ns]"
-//        << std::endl;
-//
-//    std::this_thread::sleep_for(std::chrono::seconds(10));
-//
-//    begin = std::chrono::steady_clock::now();
-//
-//    for (size_t nCntr = 0; nCntr < nMaxNumber; nCntr++)
-//    {
-//        int64_t nValue = 0;
-//        ErrorCode ec = ptrTree->search(random_numbers[nCntr], nValue);
-//
-//        //assert(nValue == random_numbers[nCntr]);
-//    }
-//
-//    end = std::chrono::steady_clock::now();
-//    std::cout
-//        << ">> search [Time: "
-//        << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "us"
-//        << ", " << std::chrono::duration_cast<std::chrono::nanoseconds> (end - begin).count() << "ns]"
-//        << std::endl;
-//
-//    std::this_thread::sleep_for(std::chrono::seconds(10));
-//return;
-////ptrTree->flush();
-//
-//    begin = std::chrono::steady_clock::now();
-//
-//    for (size_t nCntr = 0; nCntr < nMaxNumber; nCntr++)
-//    {
-//        int64_t nValue = 0;
-//        ErrorCode ec = ptrTree->remove(random_numbers[nCntr]);
-//
-//        //assert(nValue == random_numbers[nCntr]);
-//    }
-//
-//    end = std::chrono::steady_clock::now();
-//    std::cout
-//        << ">> delete [Time: "
-//        << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "us"
-//        << ", " << std::chrono::duration_cast<std::chrono::nanoseconds> (end - begin).count() << "ns]"
-//        << std::endl;
-//}
-//
-//void fptree_bm()
-//{
-//#ifdef __TREE_WITH_CACHE__
-//    typedef CHAR16 KeyType;
-//    typedef int64_t ValueType;
-//
-//    typedef ObjectFatUID ObjectUIDType;
-//
-//    typedef DataNodeROpt<KeyType, ValueType, ObjectUIDType, TYPE_UID::DATA_NODE_INT_INT> DataNodeType;
-//    //typedef IndexNodeROpt<KeyType, ValueType, ObjectUIDType, DataNodeType, TYPE_UID::INDEX_NODE_INT_INT> IndexNodeType;
-//
-//    //typedef DataNode<KeyType, ValueType, ObjectUIDType, TYPE_UID::DATA_NODE_INT_INT> DataNodeType;
-//    typedef IndexNode<KeyType, ValueType, ObjectUIDType, DataNodeType, TYPE_UID::INDEX_NODE_INT_INT> IndexNodeType;
-//
-//    typedef LRUCacheObject<TypeMarshaller, DataNodeType, IndexNodeType> ObjectType;
-//    typedef IFlushCallback<ObjectUIDType, ObjectType> ICallback;
-//
-//    //typedef BPlusStore<ICallback, KeyType, ValueType, LRUCache<ICallback, FileStorage<ICallback, ObjectUIDType, LRUCacheObject, TypeMarshaller, DataNodeType, IndexNodeType>>> BPlusStoreType;
-//    //BPlusStoreType ptrTree(24, 1024, 512, 10ULL * 1024 * 1024 * 1024, FILE_STORAGE_PATH);
-//
-//    //typedef BPlusStore<ICallback, KeyType, ValueType, LRUCache<ICallback, VolatileStorage<ICallback, ObjectUIDType, LRUCacheObject, TypeMarshaller, DataNodeType, IndexNodeType>>> BPlusStoreType;
-//    //BPlusStoreType ptrTree(24, 1024, 4096, 10ULL * 1024 * 1024 * 1024);
-//
-//    typedef BPlusStore<ICallback, KeyType, ValueType, LRUCache<ICallback, PMemStorage<ICallback, ObjectUIDType, LRUCacheObject, TypeMarshaller, DataNodeType, IndexNodeType>>> BPlusStoreType;
-//	
-//    //typedef BPlusStore<KeyType, ValueType, NoCache<ObjectUIDType, NoCacheObject, DataNodeType, IndexNodeType>> BPlusStoreType;
-//    
-//    // Single-threaded test
-//    {
-//        size_t nMaxNumber = 5000000;
-//	
-//        for (size_t nDegree = 32; nDegree < 4000; nDegree = nDegree + 10)
+//        size_t nMaxNumber = 50000000;
+//        //size_t nMaxNumber = 100000;
+//        for (size_t nDegree = 1000; nDegree < 2001; nDegree = nDegree + 100)
 //        {
-//		//break;
 //            size_t nInternalNodeSize = (nDegree - 1) * sizeof(ValueType) + nDegree * sizeof(ObjectUIDType) + sizeof(int*);
 //            size_t nTotalInternalNodes = nMaxNumber / nDegree;
 //            //size_t nMemoryOfNodes = nTotalNodes * nNodeSize;
@@ -1000,7 +1043,7 @@
 //
 //            std::cout
 //                << "Order = " << nDegree
-//                << ", Total IN (n) = " << nTotalInternalNodes
+//                << ", Total Memory (B) = " << nTotalMemory
 //                << ", Total Memory (MB) = " << nTotalMemoryInMB
 //                << ", Block Size = " << nBlockSize
 //                << std::endl;
@@ -1008,62 +1051,22 @@
 //            for (size_t nCntr = 0; nCntr < 1; nCntr++)
 //            {
 //                //BPlusStoreType ptrTree(nDegree, nTotalMemoryInMB, nBlockSize, 25ULL * 1024 * 1024 * 1024, FILE_STORAGE_PATH);
-//                BPlusStoreType ptrTree(nDegree, nTotalInternalNodes, nBlockSize, 120ULL * 1024 * 1024 * 1024, PMEM_STORAGE_PATH_II);
+//                BPlusStoreType ptrTree(nDegree, nTotalMemoryInMB, nBlockSize, 120ULL * 1024 * 1024 * 1024, PMEM_STORAGE_PATH_II);
 //                ptrTree.init<DataNodeType>();
 //
 //                std::cout << "Iteration = " << nCntr + 1 << std::endl;
-//                fptree_test<BPlusStoreType>(&ptrTree, nMaxNumber);
+//                fptree_threaded_test<BPlusStoreType>(&ptrTree, nMaxNumber, 12);
 //                std::this_thread::sleep_for(std::chrono::seconds(10));
-//                //break;
 //            }
 //	    std::cout << std::endl;
-//            //std::this_thread::sleep_for(std::chrono::seconds(10));
-//            //break;
+//            std::this_thread::sleep_for(std::chrono::seconds(10));
 //        }
 //    }
-//return;
-////#ifdef __CONCURRENT__
-////    // Multi-threaded test
-////    {
-////        size_t nMaxNumber = 50000000;
-////        //size_t nMaxNumber = 100000;
-////        for (size_t nDegree = 1000; nDegree < 2001; nDegree = nDegree + 100)
-////        {
-////            size_t nInternalNodeSize = (nDegree - 1) * sizeof(ValueType) + nDegree * sizeof(ObjectUIDType) + sizeof(int*);
-////            size_t nTotalInternalNodes = nMaxNumber / nDegree;
-////            //size_t nMemoryOfNodes = nTotalNodes * nNodeSize;
-////            //size_t nMemoryOfData = nMaxNumber * sizeof(KeyType);
-////            size_t nTotalMemory = nTotalInternalNodes * nInternalNodeSize;
-////            size_t nTotalMemoryInMB = nTotalMemory / (1024 * 1024);
-////
-////            size_t nBlockSize = nInternalNodeSize > 256 ? 256 : 128;
-////
-////            std::cout
-////                << "Order = " << nDegree
-////                << ", Total Memory (B) = " << nTotalMemory
-////                << ", Total Memory (MB) = " << nTotalMemoryInMB
-////                << ", Block Size = " << nBlockSize
-////                << std::endl;
-////
-////            for (size_t nCntr = 0; nCntr < 1; nCntr++)
-////            {
-////                //BPlusStoreType ptrTree(nDegree, nTotalMemoryInMB, nBlockSize, 25ULL * 1024 * 1024 * 1024, FILE_STORAGE_PATH);
-////                BPlusStoreType ptrTree(nDegree, nTotalMemoryInMB, nBlockSize, 120ULL * 1024 * 1024 * 1024, PMEM_STORAGE_PATH_II);
-////                ptrTree.init<DataNodeType>();
-////
-////                std::cout << "Iteration = " << nCntr + 1 << std::endl;
-////                fptree_threaded_test<BPlusStoreType>(&ptrTree, nMaxNumber, 12);
-////                std::this_thread::sleep_for(std::chrono::seconds(10));
-////            }
-////	    std::cout << std::endl;
-////            std::this_thread::sleep_for(std::chrono::seconds(10));
-////        }
-////    }
-////#endif //__CONCURRENT__
-//#endif //__TREE_WITH_CACHE__
-//
-//}
-//
+//#endif //__CONCURRENT__
+#endif //__TREE_WITH_CACHE__
+
+}
+
 ////struct KeyTypeEx {
 ////    uint64_t value1;
 ////    uint64_t value2;
@@ -1241,9 +1244,9 @@ int main(int argc, char* argv[])
     //cache_team_test();
     //return 0;
 
-    //fptree_bm();
+    fptree_bm();
     //quick_test();
-    //return 0;
+    return 0;
 
     typedef int KeyType;
     typedef int ValueType;
