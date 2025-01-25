@@ -160,11 +160,19 @@ public:
 			//m_ptChildren.resize(nPivotCount + 1);
 
 			fs.read(reinterpret_cast<char*>(m_vtPivots.data()), nPivotCount * sizeof(KeyType));
-			fs.read(reinterpret_cast<char*>(m_vtChildren.data()), (nPivotCount + 1) * sizeof(typename ObjectUIDType::NodeUID));
+			//fs.read(reinterpret_cast<char*>(m_vtChildren.data()), (nPivotCount + 1) * sizeof(typename ObjectUIDType::NodeUID));
 
 			//for (auto& ptr : m_ptChildren) {
 			//	ptr = nullptr;
 			//}
+
+			for (auto& ptr : m_vtChildren) {
+				fs.read(reinterpret_cast<char*>(&(ptr.uid)), sizeof(typename ObjectUIDType::NodeUID));
+
+				//memcpy(&(ptr.uid), szData + nOffset, sizeof(typename ObjectUIDType::NodeUID));
+				ptr.ptr = nullptr;
+				//nOffset += sizeof(typename ObjectUIDType::NodeUID);
+			}
 		}
 		else
 		{
@@ -219,12 +227,21 @@ public:
 				= sizeof(uint8_t)					// UID
 				+ sizeof(uint16_t)						// Total keys
 				+ (nKeyCount * sizeof(KeyType))			// Size of all keys
-				+ (nValueCount * sizeof(typename ObjectUIDType::NodeUID));	// Size of all values
+				+ (nValueCount * sizeof(typename ObjectUIDType::NodeUID)) + 1;	// Size of all values
 
 			fs.write(reinterpret_cast<const char*>(&uidObjectType), sizeof(uint8_t));
 			fs.write(reinterpret_cast<const char*>(&nKeyCount), sizeof(uint16_t));
 			fs.write(reinterpret_cast<const char*>(m_vtPivots.data()), nKeyCount * sizeof(KeyType));
-			fs.write(reinterpret_cast<const char*>(m_vtChildren.data()), (nKeyCount + 1) * sizeof(typename ObjectUIDType::NodeUID));	// fix it!
+			
+			//fs.write(reinterpret_cast<const char*>(m_vtChildren.data()), (nKeyCount + 1) * sizeof(typename ObjectUIDType::NodeUID));	// fix it!
+
+			for (auto it = m_vtChildren.begin(); it != m_vtChildren.end(); it++)
+			{
+				fs.write(reinterpret_cast<const char*>(&((*it).uid)), sizeof(typename ObjectUIDType::NodeUID));	// fix it!
+
+				//memcpy(szBuffer + nOffset, &((*it).uid), sizeof(typename ObjectUIDType::NodeUID));
+				//nOffset += sizeof(typename ObjectUIDType::NodeUID);
+			}
 
 #ifdef __VALIDITY_CHECK__
 			for (auto it = m_vtChildren.begin(); it != m_vtChildren.end(); it++)
@@ -1125,6 +1142,11 @@ public:
 	template <typename CacheType, typename CacheObjectType>
 	void print(std::ofstream& os, std::shared_ptr<CacheType>& ptrCache, size_t nLevel, string stPrefix)
 	{
+
+#ifdef __TREE_WITH_CACHE__
+		std::vector<std::pair<ObjectUIDType, CacheObjectType>> vtAccessedNodes;
+#endif //__TREE_WITH_CACHE__
+
 		uint8_t nSpaceCount = 7;
 
 		stPrefix.append(std::string(nSpaceCount - 1, ' '));
@@ -1172,6 +1194,8 @@ public:
 				m_vtChildren[nIndex].uid = *uidUpdated;
 				
 			}
+
+			vtAccessedNodes.push_back(std::make_pair(m_vtChildren[nIndex].uid, ptrNode));
 #else //__TREE_WITH_CACHE__
 			ptrCache->getObject(m_vtChildren[nIndex], ptrNode);
 #endif //__TREE_WITH_CACHE__
@@ -1188,6 +1212,11 @@ public:
 				shared_ptr<DataNodeType> ptrDataNode = std::get<shared_ptr<DataNodeType>>(ptrNode->getInnerData());
 				ptrDataNode->print(os, nLevel + 1, stPrefix);
 			}
+
+#ifdef __TREE_WITH_CACHE__
+			ptrCache->reorder(vtAccessedNodes);
+			vtAccessedNodes.clear();
+#endif //__TREE_WITH_CACHE__
 		}
 	}
 

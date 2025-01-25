@@ -119,6 +119,8 @@ public:
                 _ptr->template updateChildUID_<ObjectType>(ptrCurrentNode, uidCurrentNode, uidCurrentNode);
 
                 // todo.. should be hooked here..
+
+                //what if m_ptrRootnode is null!
             }
 #else //__TREE_WITH_CACHE__
             m_ptrCache->getObject(uidCurrentNode, ptrCurrentNode);
@@ -393,11 +395,32 @@ public:
         ObjectTypePtr ptrCurrentNode = nullptr;
         ObjectUIDType uidCurrentNode = *m_uidRootNode;
 
+        uidCurrentNode = m_uidRootNode.value();
+        ptrCurrentNode = m_ptrRootNode;
         do
         {
 #ifdef __TREE_WITH_CACHE__
             std::optional<ObjectUIDType> uidUpdated = std::nullopt;
-            m_ptrCache->getObject(uidCurrentNode, ptrCurrentNode, uidUpdated);
+
+            if (ptrCurrentNode == nullptr)
+            {
+                m_ptrCache->getObject(uidCurrentNode, ptrCurrentNode, uidUpdated);
+
+                ObjectTypePtr ptrLastNode = vtAccessedNodes.size() > 0 ? vtAccessedNodes[vtAccessedNodes.size() - 1].second : nullptr;
+                if (ptrLastNode != nullptr)
+                {
+                    std::shared_ptr<IndexNodeType> _ptr = std::get<std::shared_ptr<IndexNodeType>>(ptrLastNode->getInnerData());
+                    _ptr->template updateChildUID_<ObjectType>(ptrCurrentNode, uidCurrentNode, uidCurrentNode);
+                }
+                else
+                {
+                    m_ptrRootNode = ptrCurrentNode;
+                    ptrCurrentNode->hook_(&m_ptrRootNode);
+                }
+                // todo.. should be hooked here..
+            }
+
+
 #else //__TREE_WITH_CACHE__
             m_ptrCache->getObject(uidCurrentNode, ptrCurrentNode);
 #endif //__TREE_WITH_CACHE__
@@ -450,7 +473,9 @@ public:
             {
                 std::shared_ptr<IndexNodeType> ptrIndexNode = std::get<std::shared_ptr<IndexNodeType>>(ptrCurrentNode->getInnerData());
 
-                uidCurrentNode = ptrIndexNode->getChild(key);
+                //uidCurrentNode = ptrIndexNode->getChild(key);
+
+                ptrIndexNode->getChild(key, uidCurrentNode, ptrCurrentNode);
             }
             else //if (std::holds_alternative<std::shared_ptr<DataNodeType>>(ptrCurrentNode->getInnerData()))
             {
@@ -792,6 +817,10 @@ public:
 
     void print(std::ofstream & os)
     {
+#ifdef __TREE_WITH_CACHE__
+        std::vector<std::pair<ObjectUIDType, ObjectTypePtr>> vtAccessedNodes;
+#endif //__TREE_WITH_CACHE__
+
         int nSpace = 7;
 
         std::string prefix;
@@ -817,6 +846,11 @@ public:
         {
             m_uidRootNode = uidUpdated;
         }
+
+
+        vtAccessedNodes.push_back(std::make_pair(m_uidRootNode.value(), ptrRootNode));
+
+
 #else //__TREE_WITH_CACHE__
         m_ptrCache->getObject(m_uidRootNode.value(), ptrRootNode);
 #endif //__TREE_WITH_CACHE__
@@ -833,6 +867,11 @@ public:
 
             ptrDataNode->print(os, 0, prefix);
         }
+
+#ifdef __TREE_WITH_CACHE__
+        m_ptrCache->reorder(vtAccessedNodes);
+        vtAccessedNodes.clear();
+#endif //__TREE_WITH_CACHE__
     }
 
 #ifdef __TREE_WITH_CACHE__

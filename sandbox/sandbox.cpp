@@ -1260,11 +1260,11 @@ int main(int argc, char* argv[])
     typedef LRUCacheObject<ObjectUIDType, TypeMarshaller, DataNodeType, IndexNodeType> ObjectType;
     typedef IFlushCallback<ObjectUIDType, ObjectType> ICallback;
 
-    //typedef BPlusStore<ICallback, KeyType, ValueType, LRUCache<ICallback, FileStorage<ICallback, ObjectUIDType, LRUCacheObject, TypeMarshaller, DataNodeType, IndexNodeType>>> BPlusStoreType;
-    //BPlusStoreType ptrTree(24, 1024, 512, 10ULL * 1024 * 1024 * 1024, FILE_STORAGE_PATH);
+    typedef BPlusStore<ICallback, KeyType, ValueType, LRUCache<ICallback, FileStorage<ICallback, ObjectUIDType, LRUCacheObject, TypeMarshaller, DataNodeType, IndexNodeType>>> BPlusStoreType;
+    BPlusStoreType ptrTree(24, 1024, 512, 10ULL * 1024 * 1024 * 1024, FILE_STORAGE_PATH);
     
-    typedef BPlusStore<ICallback, KeyType, ValueType, LRUCache<ICallback, VolatileStorage<ICallback, ObjectUIDType, LRUCacheObject, TypeMarshaller, DataNodeType, IndexNodeType>>> BPlusStoreType;
-    BPlusStoreType ptrTree(3, 50, 32, 4ULL * 1024 * 1024 * 1024);
+    //typedef BPlusStore<ICallback, KeyType, ValueType, LRUCache<ICallback, VolatileStorage<ICallback, ObjectUIDType, LRUCacheObject, TypeMarshaller, DataNodeType, IndexNodeType>>> BPlusStoreType;
+    //BPlusStoreType ptrTree(3, 50, 32, 4ULL * 1024 * 1024 * 1024);
     
     //typedef BPlusStore<ICallback, KeyType, ValueType, LRUCache<ICallback, PMemStorage<ICallback, ObjectUIDType, LRUCacheObject, TypeMarshaller, DataNodeType, IndexNodeType>>> BPlusStoreType;
     //BPlusStoreType ptrTree(48, 4096 ,512 , 10ULL * 1024 * 1024 * 1024, FILE_STORAGE_PATH);
@@ -1283,12 +1283,12 @@ int main(int argc, char* argv[])
     ptrTree.init<DataNodeType>();
 #endif //__TREE_WITH_CACHE__
 
-    size_t nTotalEntries = 500020;
+    size_t nTotalEntries = 100000;
     std::vector<int> random_numbers(nTotalEntries);//50000000);
     std::iota(random_numbers.begin(), random_numbers.end(), 1); // Fill vector with 1 to 5,000,000
     std::random_device rd; // Obtain a random number from hardware
     std::mt19937 eng(rd()); // Seed the generator
-    //std::shuffle(random_numbers.begin(), random_numbers.end(), eng);
+    std::shuffle(random_numbers.begin(), random_numbers.end(), eng);
 
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
@@ -1296,7 +1296,7 @@ int main(int argc, char* argv[])
     {
         ptrTree.insert(random_numbers[nCntr], random_numbers[nCntr]);
         size_t a, b;
-        ptrTree.getCacheState(a, b);
+        //ptrTree.getCacheState(a, b);
     }
 
     ptrTree.flush();
@@ -1328,12 +1328,12 @@ int main(int argc, char* argv[])
 
     begin = std::chrono::steady_clock::now();
 
-    for (size_t nCntr = 0; nCntr <= nTotalEntries; nCntr = nCntr + 2)
+    for (size_t nCntr = 0; nCntr < nTotalEntries; nCntr++)
     {
         ValueType nValue = 0;
-        //ErrorCode ec = ptrTree.search(random_numbers[nCntr], nValue);
+        ErrorCode ec = ptrTree.search(random_numbers[nCntr], nValue);
 
-        //assert(nValue == random_numbers[nCntr]);
+        assert(nValue == random_numbers[nCntr]);
     }
 
     end = std::chrono::steady_clock::now();

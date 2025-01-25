@@ -13,7 +13,7 @@
 template<
 	typename ICallback,
 	typename KeyType,
-	template <typename, typename...> typename ValueType,
+	template <typename, typename, typename...> typename ValueType,
 	typename CoreTypesMarshaller, 
 	typename... ValueCoreTypes
 >
@@ -22,8 +22,11 @@ class FileStorage
 	typedef FileStorage<ICallback, KeyType, ValueType, CoreTypesMarshaller, ValueCoreTypes...> SelfType;
 
 public:
+	//typedef KeyType ObjectUIDType;
+	//typedef ValueType<CoreTypesMarshaller, ValueCoreTypes...> ObjectType;
 	typedef KeyType ObjectUIDType;
-	typedef ValueType<CoreTypesMarshaller, ValueCoreTypes...> ObjectType;
+	typedef ValueType<KeyType, CoreTypesMarshaller, ValueCoreTypes...> ObjectType;
+
 
 private:
 	size_t m_nFileSize;
