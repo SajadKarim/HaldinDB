@@ -1317,9 +1317,9 @@ int main(int argc, char* argv[])
     //cache_team_test();
     //return 0;
 
-    fptree_bm();
+    //fptree_bm();
     //quick_test();
-    return 0;
+    //return 0;
 
     typedef int KeyType;
     typedef int ValueType;
@@ -1345,6 +1345,83 @@ int main(int argc, char* argv[])
     //typedef BPlusStore<ICallback, KeyType, ValueType, LRUCache<ICallback, PMemStorage<ICallback, ObjectUIDType, LRUCacheObject, TypeMarshaller, DataNodeType, IndexNodeType>>> BPlusStoreType;
     //BPlusStoreType ptrTree(48, 4096 ,512 , 10ULL * 1024 * 1024 * 1024, FILE_STORAGE_PATH);
 
+    std::vector< std::variant<std::shared_ptr<DataNodeType>, std::shared_ptr<IndexNodeType>> > _vt;
+    for (size_t _i = 0; _i < 5000000; _i = _i + 2)
+    {
+        std::shared_ptr<DataNodeType> _obj1 = std::make_shared<DataNodeType>();
+        std::shared_ptr<IndexNodeType> _obj2 = std::make_shared<IndexNodeType>();
+
+        _vt.push_back(_obj1);
+        _vt.push_back(_obj2);
+    }
+
+    std::chrono::steady_clock::time_point _b = std::chrono::steady_clock::now();
+    for (size_t _i = 0; _i < 5000000; _i = _i + 2)
+    {
+        if (std::holds_alternative<std::shared_ptr<IndexNodeType>>(_vt[_i]))
+        {
+            std::shared_ptr<IndexNodeType> ptrIndexNode = std::get<std::shared_ptr<IndexNodeType>>(_vt[_i]);
+
+        }
+        else //if (std::holds_alternative<std::shared_ptr<DataNodeType>>(ptrCurrentNode->getInnerData()))
+        {
+            std::shared_ptr<DataNodeType> ptrDataNode = std::get<std::shared_ptr<DataNodeType>>(_vt[_i]);
+
+        }
+    }
+
+    std::chrono::steady_clock::time_point _e = std::chrono::steady_clock::now();
+    std::cout
+        << ">> flush [Time: "
+        << std::chrono::duration_cast<std::chrono::microseconds>(_e - _b).count() << "us"
+        << ", " << std::chrono::duration_cast<std::chrono::nanoseconds> (_e - _b).count() << "ns]"
+        << std::endl;
+
+
+    struct exp {
+        uint8_t type;
+        void* ptr;
+    };
+
+    std::vector< exp > _vt1;
+    for (size_t _i = 0; _i < 5000000; _i = _i + 2)
+    {
+        DataNodeType* _obj1 = new DataNodeType();
+        IndexNodeType* _obj2 = new IndexNodeType();
+
+        exp e1;
+        e1.type = DataNodeType::UID;
+        e1.ptr = _obj1;
+
+        exp e2;
+        e2.type = IndexNodeType::UID;
+        e2.ptr = _obj2;
+
+        _vt1.push_back(e1);
+        _vt1.push_back(e2);
+    }
+
+    _b = std::chrono::steady_clock::now();
+    for (size_t _i = 0; _i < 5000000; _i = _i + 2)
+    {
+        if (_vt1[_i].type == IndexNodeType::UID)
+        {
+            IndexNodeType* ptrIndexNode = reinterpret_cast<IndexNodeType*>(_vt1[_i].ptr);
+        }
+        else //if (std::holds_alternative<std::shared_ptr<DataNodeType>>(ptrCurrentNode->getInnerData()))
+        {
+            DataNodeType* ptrIndexNode = reinterpret_cast<DataNodeType*>(_vt1[_i].ptr);
+        }
+    }
+
+    _e = std::chrono::steady_clock::now();
+    std::cout
+        << ">> flush [Time: "
+        << std::chrono::duration_cast<std::chrono::microseconds>(_e - _b).count() << "us"
+        << ", " << std::chrono::duration_cast<std::chrono::nanoseconds> (_e - _b).count() << "ns]"
+        << std::endl;
+
+
     ptrTree.init<DataNodeType>();
 #else //__TREE_WITH_CACHE__
     typedef int KeyType;
@@ -1352,7 +1429,7 @@ int main(int argc, char* argv[])
     typedef uintptr_t ObjectUIDType;
 
     typedef DataNode<KeyType, ValueType, ObjectUIDType, TYPE_UID::DATA_NODE_INT_INT> DataNodeType;
-    typedef IndexNode<KeyType, ValueType, ObjectUIDType, DataNodeType, TYPE_UID::INDEX_NODE_INT_INT> IndexNodeType;
+    typedef IndexNode<KeyType, ValueType, ObjectUIDType, DataNodeType, TypeMarshaller, TYPE_UID::INDEX_NODE_INT_INT> IndexNodeType;
 
     typedef BPlusStore<KeyType, ValueType, NoCache<ObjectUIDType, NoCacheObject, DataNodeType, IndexNodeType>> BPlusStoreType;
     BPlusStoreType ptrTree(24);
@@ -1375,7 +1452,7 @@ int main(int argc, char* argv[])
         //ptrTree.getCacheState(a, b);
     }
 
-    ptrTree.flush();
+    //ptrTree.flush();
 
     std::ofstream out_1("d:\\tree_post_insert_0.txt");
         ptrTree.print(out_1);
