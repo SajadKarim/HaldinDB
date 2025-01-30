@@ -83,6 +83,9 @@ public:
 	ValueCoreTypesWrapper m_objData;
 	std::shared_mutex m_mtx;
 
+	void* _ptrobj;
+	uint8_t _ptrobjtype;
+
 	ObjectUIDType m_uidSelf;
 	std::shared_ptr<SelfType> m_ptrPrev;
 	std::shared_ptr<SelfType> m_ptrNext;
@@ -91,6 +94,20 @@ public:
 	~LRUCacheObject()
 	{
 		resetVaraint(m_objData);
+	}
+
+
+	//template<class ValueCoreType>
+	LRUCacheObject(void* ptrCoreObject, uint8_t nType)
+		: m_bDirty(true)
+		, m_ptrNext(nullptr)
+		, m_ptrPrev(nullptr)
+		, hook(NULL)
+	{
+		_ptrobj = ptrCoreObject;
+		_ptrobjtype = nType;
+
+		//ObjectUIDType::createAddressFromVolatilePointer(m_uidSelf, nType, reinterpret_cast<uintptr_t>(this));
 	}
 
 	template<class ValueCoreType>
@@ -104,6 +121,8 @@ public:
 
 		//ObjectUIDType::createAddressFromVolatilePointer(m_uidSelf, nType, reinterpret_cast<uintptr_t>(this));
 	}
+
+
 
 	template<class ValueCoreType>
 	LRUCacheObject(/*const ObjectUIDType& uidObject, */std::shared_ptr<ValueCoreType> ptrCoreObject)

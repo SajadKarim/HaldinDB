@@ -1345,8 +1345,8 @@ int main(int argc, char* argv[])
     //typedef BPlusStore<ICallback, KeyType, ValueType, LRUCache<ICallback, PMemStorage<ICallback, ObjectUIDType, LRUCacheObject, TypeMarshaller, DataNodeType, IndexNodeType>>> BPlusStoreType;
     //BPlusStoreType ptrTree(48, 4096 ,512 , 10ULL * 1024 * 1024 * 1024, FILE_STORAGE_PATH);
 
-    std::vector< std::variant<std::shared_ptr<DataNodeType>, std::shared_ptr<IndexNodeType>> > _vt;
-    for (size_t _i = 0; _i < 5000000; _i = _i + 2)
+/*   std::vector< std::variant<std::shared_ptr<DataNodeType>, std::shared_ptr<IndexNodeType>> > _vt;
+    for (size_t _i = 0; _i < 500000; _i = _i + 2)
     {
         std::shared_ptr<DataNodeType> _obj1 = std::make_shared<DataNodeType>();
         std::shared_ptr<IndexNodeType> _obj2 = std::make_shared<IndexNodeType>();
@@ -1356,7 +1356,7 @@ int main(int argc, char* argv[])
     }
 
     std::chrono::steady_clock::time_point _b = std::chrono::steady_clock::now();
-    for (size_t _i = 0; _i < 5000000; _i = _i + 2)
+    for (size_t _i = 0; _i < 500000; _i++)
     {
         if (std::holds_alternative<std::shared_ptr<IndexNodeType>>(_vt[_i]))
         {
@@ -1380,37 +1380,37 @@ int main(int argc, char* argv[])
 
     struct exp {
         uint8_t type;
-        void* ptr;
+        std::shared_ptr< void*> ptr;
     };
 
     std::vector< exp > _vt1;
-    for (size_t _i = 0; _i < 5000000; _i = _i + 2)
+    for (size_t _i = 0; _i < 500000; _i = _i + 2)
     {
         DataNodeType* _obj1 = new DataNodeType();
         IndexNodeType* _obj2 = new IndexNodeType();
 
         exp e1;
         e1.type = DataNodeType::UID;
-        e1.ptr = _obj1;
+        e1.ptr = std::make_shared<void*>( _obj1);
 
         exp e2;
         e2.type = IndexNodeType::UID;
-        e2.ptr = _obj2;
+        e2.ptr = std::make_shared<void*>(_obj2);
 
         _vt1.push_back(e1);
         _vt1.push_back(e2);
     }
 
     _b = std::chrono::steady_clock::now();
-    for (size_t _i = 0; _i < 5000000; _i = _i + 2)
+    for (size_t _i = 0; _i < 500000; _i++)
     {
         if (_vt1[_i].type == IndexNodeType::UID)
         {
-            IndexNodeType* ptrIndexNode = reinterpret_cast<IndexNodeType*>(_vt1[_i].ptr);
+            IndexNodeType* ptrIndexNode = reinterpret_cast<IndexNodeType*>(*_vt1[_i].ptr);
         }
         else //if (std::holds_alternative<std::shared_ptr<DataNodeType>>(ptrCurrentNode->getInnerData()))
         {
-            DataNodeType* ptrIndexNode = reinterpret_cast<DataNodeType*>(_vt1[_i].ptr);
+            DataNodeType* ptrIndexNode = reinterpret_cast<DataNodeType*>(*_vt1[_i].ptr);
         }
     }
 
@@ -1420,7 +1420,7 @@ int main(int argc, char* argv[])
         << std::chrono::duration_cast<std::chrono::microseconds>(_e - _b).count() << "us"
         << ", " << std::chrono::duration_cast<std::chrono::nanoseconds> (_e - _b).count() << "ns]"
         << std::endl;
-
+*/
 
     ptrTree.init<DataNodeType>();
 #else //__TREE_WITH_CACHE__
@@ -1454,10 +1454,10 @@ int main(int argc, char* argv[])
 
     //ptrTree.flush();
 
-    std::ofstream out_1("d:\\tree_post_insert_0.txt");
-        ptrTree.print(out_1);
-        out_1.flush();
-        out_1.close();
+    //std::ofstream out_1("d:\\tree_post_insert_0.txt");
+    //    ptrTree.print(out_1);
+    //    out_1.flush();
+    //    out_1.close();
 
         std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
     std::cout
@@ -1469,7 +1469,7 @@ int main(int argc, char* argv[])
 #ifdef __TREE_WITH_CACHE__
     begin = std::chrono::steady_clock::now();
 
-    ptrTree.flush();
+    //ptrTree.flush();
 
     end = std::chrono::steady_clock::now();
     std::cout

@@ -73,7 +73,7 @@ public:
 #endif //__TREE_WITH_CACHE__
 
         //m_ptrCache->template createObjectOfType<DefaultNodeType>(m_uidRootNode);
-        m_ptrCache->template createObjectOfType<DefaultNodeType>(m_ptrRootNode, m_uidRootNode);
+        m_ptrCache->template createObjectOfType__<DefaultNodeType>(m_ptrRootNode, m_uidRootNode);
         m_ptrRootNode->hook_(&m_ptrRootNode);
         //m_ptrRootNode->unhook_();
 
@@ -162,13 +162,15 @@ public:
             vtAccessedNodes.push_back(std::make_pair(uidCurrentNode, ptrCurrentNode));
 #endif //__TREE_WITH_CACHE__
 
-            if (std::holds_alternative<std::shared_ptr<IndexNodeType>>(ptrCurrentNode->getInnerData()))
+            if (ptrCurrentNode->_ptrobjtype == IndexNodeType::UID)
+            //if (std::holds_alternative<std::shared_ptr<IndexNodeType>>(ptrCurrentNode->getInnerData()))
             {
                 vtNodes.push_back(std::pair<ObjectUIDType, ObjectTypePtr>(uidCurrentNode, ptrCurrentNode));
 
-                std::shared_ptr<IndexNodeType> ptrIndexNode = std::get<std::shared_ptr<IndexNodeType>>(ptrCurrentNode->getInnerData());
+                IndexNodeType* _ptrIndexNode =  reinterpret_cast<IndexNodeType*>(ptrCurrentNode->_ptrobj);
+                //std::shared_ptr<IndexNodeType> ptrIndexNode = std::get<std::shared_ptr<IndexNodeType>>(ptrCurrentNode->getInnerData());
 
-                if (!ptrIndexNode->canTriggerSplit(m_nDegree))
+                if (!_ptrIndexNode->canTriggerSplit(m_nDegree))
                 {
 #ifdef __CONCURRENT__
                     vtLocks.erase(vtLocks.begin(), vtLocks.end() - 2);
@@ -179,16 +181,18 @@ public:
                 uidLastNode = uidCurrentNode;
                 ptrLastNode = ptrCurrentNode;
 
-                ptrIndexNode->getChild(key, uidCurrentNode, ptrCurrentNode);
+                _ptrIndexNode->getChild(key, uidCurrentNode, ptrCurrentNode);
             }
             else //if (std::holds_alternative<std::shared_ptr<DataNodeType>>(ptrCurrentNode->getInnerData()))
             {
-                std::shared_ptr<DataNodeType> ptrDataNode = std::get<std::shared_ptr<DataNodeType>>(ptrCurrentNode->getInnerData());
+                DataNodeType* _ptrDataNode = reinterpret_cast<DataNodeType*>(ptrCurrentNode->_ptrobj);
+
+                //std::shared_ptr<DataNodeType> ptrDataNode = std::get<std::shared_ptr<DataNodeType>>(ptrCurrentNode->getInnerData());
 
 #ifdef __TRACK_CACHE_FOOTPRINT__
                 if (ptrDataNode->insert(key, value, nMemoryFootprint) != ErrorCode::Success)
 #else //__TRACK_CACHE_FOOTPRINT__
-                if (ptrDataNode->insert(key, value) != ErrorCode::Success)
+                if (_ptrDataNode->insert(key, value) != ErrorCode::Success)
 #endif //__TRACK_CACHE_FOOTPRINT__
                 {
 #ifdef __CONCURRENT__
@@ -208,12 +212,12 @@ public:
                 ptrCurrentNode->setDirtyFlag(true);
 #endif //__TREE_WITH_CACHE__
 
-                if (ptrDataNode->requireSplit(m_nDegree))
+                if (_ptrDataNode->requireSplit(m_nDegree))
                 {
 #ifdef __TRACK_CACHE_FOOTPRINT__
-                    ErrorCode errCode = ptrDataNode->template split<CacheType, ObjectTypePtr>(m_ptrCache, uidRHSChildNode, ptrRHSChildNode, pivotKey, nMemoryFootprint);
+                    ErrorCode errCode = _ptrDataNode->template split<CacheType, ObjectTypePtr>(m_ptrCache, uidRHSChildNode, ptrRHSChildNode, pivotKey, nMemoryFootprint);
 #else //__TRACK_CACHE_FOOTPRINT__
-                    ErrorCode errCode = ptrDataNode->template split<CacheType, ObjectTypePtr>(m_ptrCache, uidRHSChildNode, ptrRHSChildNode, pivotKey);
+                    ErrorCode errCode = _ptrDataNode->template split<CacheType, ObjectTypePtr>(m_ptrCache, uidRHSChildNode, ptrRHSChildNode, pivotKey);
 #endif //__TRACK_CACHE_FOOTPRINT__
 
                     if (errCode != ErrorCode::Success)
@@ -261,12 +265,14 @@ public:
             uidCurrentNode = vtNodes.back().first;
             ptrCurrentNode = vtNodes.back().second;
 
-            std::shared_ptr<IndexNodeType> ptrIndexNode = std::get<std::shared_ptr<IndexNodeType>>(ptrCurrentNode->getInnerData());
+            IndexNodeType* _ptrIndexNode = reinterpret_cast<IndexNodeType*>(ptrCurrentNode->_ptrobj);
+
+            //std::shared_ptr<IndexNodeType> ptrIndexNode = std::get<std::shared_ptr<IndexNodeType>>(ptrCurrentNode->getInnerData());
 
 #ifdef __TRACK_CACHE_FOOTPRINT__
             if (ptrIndexNode->insert(pivotKey, *uidRHSChildNode, nMemoryFootprint) != ErrorCode::Success)
 #else //__TRACK_CACHE_FOOTPRINT__
-            if (ptrIndexNode->insert(pivotKey, *uidRHSChildNode, ptrRHSChildNode) != ErrorCode::Success)
+            if (_ptrIndexNode->insert(pivotKey, *uidRHSChildNode, ptrRHSChildNode) != ErrorCode::Success)
 #endif //__TRACK_CACHE_FOOTPRINT__
             {
                 // TODO: Should update be performed on cloned objects first?
@@ -281,12 +287,12 @@ public:
             uidRHSChildNode = std::nullopt;
             ptrRHSChildNode = nullptr;
 
-            if (ptrIndexNode->requireSplit(m_nDegree))
+            if (_ptrIndexNode->requireSplit(m_nDegree))
             {
 #ifdef __TRACK_CACHE_FOOTPRINT__
                 ErrorCode errCode = ptrIndexNode->template split<CacheType>(m_ptrCache, uidRHSChildNode, ptrRHSChildNode, pivotKey, nMemoryFootprint);
 #else //__TRACK_CACHE_FOOTPRINT__
-                ErrorCode errCode = ptrIndexNode->template split<CacheType>(m_ptrCache, uidRHSChildNode, ptrRHSChildNode, pivotKey);
+                ErrorCode errCode = _ptrIndexNode->template split<CacheType>(m_ptrCache, uidRHSChildNode, ptrRHSChildNode, pivotKey);
 #endif //__TRACK_CACHE_FOOTPRINT__
 
                 if (errCode != ErrorCode::Success)
@@ -329,13 +335,13 @@ public:
         if (uidCurrentNode == m_uidRootNode && ptrLHSChildNode != nullptr && ptrRHSChildNode != nullptr)
         {
             m_uidRootNode = std::nullopt;
-            m_ptrCache->template createObjectOfType<IndexNodeType>(m_ptrRootNode, m_uidRootNode, pivotKey, *uidLHSChildNode, ptrLHSChildNode, *uidRHSChildNode, ptrRHSChildNode);
+            m_ptrCache->template createObjectOfType__<IndexNodeType>(m_ptrRootNode, m_uidRootNode, pivotKey, *uidLHSChildNode, ptrLHSChildNode, *uidRHSChildNode, ptrRHSChildNode);
 
+#ifdef __TREE_WITH_CACHE__
             vtAccessedNodes.insert(vtAccessedNodes.begin(), std::make_pair(*m_uidRootNode, m_ptrRootNode));
             m_ptrRootNode->hook_(&m_ptrRootNode);
             vtAccessedNodes.insert(vtAccessedNodes.begin(), std::make_pair(*m_uidRootNode, m_ptrRootNode));
 
-#ifdef __TREE_WITH_CACHE__
             ptrCurrentNode->setDirtyFlag(true);
 
             bool bTest = false;
@@ -441,12 +447,13 @@ public:
                 ObjectTypePtr ptrLastNode = vtAccessedNodes.size() > 0 ? vtAccessedNodes[vtAccessedNodes.size() - 1].second : nullptr;
                 if (ptrLastNode != nullptr)
                 {
-                    std::shared_ptr<IndexNodeType> ptrIndexNode = std::get<std::shared_ptr<IndexNodeType>>(ptrLastNode->getInnerData());
+                    IndexNodeType* _ptrIndexNode = reinterpret_cast<IndexNodeType*>(ptrLastNode->_ptrobj);
+                    //std::shared_ptr<IndexNodeType> ptrIndexNode = std::get<std::shared_ptr<IndexNodeType>>(ptrLastNode->getInnerData());
  
 #ifdef __TRACK_CACHE_FOOTPRINT__
-                    nMemoryFootprint += ptrIndexNode->template updateChildUID<ObjectType>(ptrCurrentNode, uidCurrentNode, *uidUpdated);
+                    nMemoryFootprint += _ptrIndexNode->template updateChildUID<ObjectType>(ptrCurrentNode, uidCurrentNode, *uidUpdated);
 #else //__TRACK_CACHE_FOOTPRINT__
-                    ptrIndexNode->template updateChildUID<ObjectType>(ptrCurrentNode, uidCurrentNode, *uidUpdated);
+                    _ptrIndexNode->template updateChildUID<ObjectType>(ptrCurrentNode, uidCurrentNode, *uidUpdated);
 #endif //__TRACK_CACHE_FOOTPRINT__
 
                     ptrLastNode->setDirtyFlag(true);
@@ -469,19 +476,22 @@ public:
             vtAccessedNodes.push_back(std::make_pair(uidCurrentNode, ptrCurrentNode));
 #endif //__TREE_WITH_CACHE__
 
-            if (std::holds_alternative<std::shared_ptr<IndexNodeType>>(ptrCurrentNode->getInnerData()))
+            if (ptrCurrentNode->_ptrobjtype == IndexNodeType::UID)
+            //if (std::holds_alternative<std::shared_ptr<IndexNodeType>>(ptrCurrentNode->getInnerData()))
             {
-                std::shared_ptr<IndexNodeType> ptrIndexNode = std::get<std::shared_ptr<IndexNodeType>>(ptrCurrentNode->getInnerData());
+                IndexNodeType* _ptrIndexNode = reinterpret_cast<IndexNodeType*>(ptrCurrentNode->_ptrobj);
+                //std::shared_ptr<IndexNodeType> ptrIndexNode = std::get<std::shared_ptr<IndexNodeType>>(ptrCurrentNode->getInnerData());
 
                 //uidCurrentNode = ptrIndexNode->getChild(key);
 
-                ptrIndexNode->getChild(key, uidCurrentNode, ptrCurrentNode);
+                _ptrIndexNode->getChild(key, uidCurrentNode, ptrCurrentNode);
             }
             else //if (std::holds_alternative<std::shared_ptr<DataNodeType>>(ptrCurrentNode->getInnerData()))
             {
-                std::shared_ptr<DataNodeType> ptrDataNode = std::get<std::shared_ptr<DataNodeType>>(ptrCurrentNode->getInnerData());
+                DataNodeType* _ptrDataNode = reinterpret_cast<DataNodeType*>(ptrCurrentNode->_ptrobj);
+                //std::shared_ptr<DataNodeType> ptrDataNode = std::get<std::shared_ptr<DataNodeType>>(ptrCurrentNode->getInnerData());
 
-                ecResult = ptrDataNode->getValue(key, value);
+                ecResult = _ptrDataNode->getValue(key, value);
 
                 break;
             }

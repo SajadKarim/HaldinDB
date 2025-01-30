@@ -420,7 +420,7 @@ public:
 
 		size_t nMid = m_vtKeys.size() / 2;
 
-		ptrCache->template createObjectOfType<SelfType>(uidSibling, ptrSibling,
+		ptrCache->template createObjectOfType__<SelfType>(uidSibling, ptrSibling,
 			m_vtKeys.begin() + nMid, m_vtKeys.end(),
 			m_vtValues.begin() + nMid, m_vtValues.end());
 

@@ -526,6 +526,72 @@ CacheErrorCode createObjectOfType_(ObjectTypePtr* ptrObject, std::optional<Objec
 	return CacheErrorCode::Success;
 }
 
+template<class Type, typename... ArgsType>
+CacheErrorCode createObjectOfType__(ObjectTypePtr& ptrObject, std::optional<ObjectUIDType>& uidObject, const ArgsType... args)
+{
+	//std::shared_ptr<Type> ptrCoreObject = std::make_shared<Type>(args...);
+
+	void* ptrobj = new Type(args...);
+	ptrObject = std::make_shared<ObjectType>(ptrobj, Type::UID);
+
+
+
+	ObjectUIDType uidTemp;
+	ObjectUIDType::createAddressFromVolatilePointer(uidTemp, Type::UID, reinterpret_cast<uintptr_t>(ptrObject.get()));
+	ptrObject->setUID(uidTemp);
+	uidObject = uidTemp;
+
+	//ObjectUIDType abc;
+	//assert(ptrObject->getUID() != abc);
+
+	//uidObject = uidTemp;
+	//ptrObject->setUID(uidTemp);
+
+	//std::shared_ptr<ObjectType> ptrItem = std::make_shared<ObjectType>(*uidObject, ptrStorageObject);
+
+#ifdef __CONCURRENT__
+	std::unique_lock<std::shared_mutex> lock_cache(m_mtxCache);
+#endif //__CONCURRENT__
+
+	if (m_mpObjects.find(*uidObject) != m_mpObjects.end())
+	{
+		std::cout << "Critical State: UID for a newly created object already exist in the cache." << std::endl;
+		throw new std::logic_error(".....");   // TODO: critical log.
+
+		//std::shared_ptr<ObjectType> ptrItem = m_mpObjects[*uidObject];
+		//ptrItem->m_ptrObject = ptrStorageObject;
+		//moveToFront(ptrItem);
+	}
+	else
+	{
+		//m_mpObjects[ptrObject->m_uidSelf] = ptrObject;
+
+#ifdef __TRACK_CACHE_FOOTPRINT__
+		m_nCacheFootprint += ptrStorageObject->getMemoryFootprint();
+#endif //__TRACK_CACHE_FOOTPRINT__
+
+		//if (!m_ptrHead)
+		//{
+		//	m_ptrHead = ptrObject;
+		//	m_ptrTail = ptrObject;
+		//}
+		//else
+		//{
+		//	ptrObject->m_ptrNext = m_ptrHead;
+		//	m_ptrHead->m_ptrPrev = ptrObject;
+		//	m_ptrHead = ptrObject;
+		//}
+	}
+
+	m_nUsedCacheCapacity++;
+
+#ifndef __CONCURRENT__
+	flushItemsToStorage();
+#endif //__CONCURRENT__
+
+	return CacheErrorCode::Success;
+}
+
 
 template<class Type, typename... ArgsType>
 CacheErrorCode createObjectOfType(ObjectTypePtr& ptrObject, std::optional<ObjectUIDType>& uidObject, const ArgsType... args)
@@ -646,6 +712,70 @@ CacheErrorCode createObjectOfType(ObjectTypePtr& ptrObject, std::optional<Object
 //
 //		return CacheErrorCode::Success;
 //	}
+
+template<class Type, typename... ArgsType>
+CacheErrorCode createObjectOfType__(std::optional<ObjectUIDType>& uidObject, ObjectTypePtr& ptrObject, const ArgsType... args)
+{
+	ptrObject = nullptr;// std::make_shared<ObjectType>(Type::UID, std::make_shared<Type>(args...));
+
+	void* ptrobj = new Type(args...);
+	ptrObject = std::make_shared<ObjectType>(ptrobj, Type::UID);
+
+
+	//ObjectUIDType uidTemp;
+	//ObjectUIDType::createAddressFromVolatilePointer(uidTemp, Type::UID, reinterpret_cast<uintptr_t>(ptrStorageObject.get()));
+
+	ObjectUIDType uidTemp;
+	ObjectUIDType::createAddressFromVolatilePointer(uidTemp, Type::UID, reinterpret_cast<uintptr_t>(ptrObject.get()));
+	ptrObject->setUID(uidTemp);
+	uidObject = uidTemp;
+
+	ObjectUIDType abc;
+	assert(ptrObject->getUID() != abc);
+	//std::shared_ptr<ObjectType> ptrItem = std::make_shared<ObjectType>(*uidObject, ptrStorageObject);
+
+#ifdef __CONCURRENT__
+	std::unique_lock<std::shared_mutex> lock_cache(m_mtxCache);
+#endif //__CONCURRENT__
+
+	if (m_mpObjects.find(*uidObject) != m_mpObjects.end())
+	{
+		std::cout << "Critical State: UID for a newly created object already exist in the cache." << std::endl;
+		throw new std::logic_error(".....");   // TODO: critical log.
+		//std::shared_ptr<ObjectType> ptrItem = m_mpObjects[*uidObject];
+		//ptrItem->m_ptrObject = ptrStorageObject;
+		//moveToFront(ptrItem);
+	}
+	else
+	{
+		//m_mpObjects[ptrObject->m_uidSelf] = ptrObject;
+
+#ifdef __TRACK_CACHE_FOOTPRINT__
+		m_nCacheFootprint += ptrStorageObject->getMemoryFootprint();
+#endif //__TRACK_CACHE_FOOTPRINT__
+
+		/*if (!m_ptrHead)
+		{
+			m_ptrHead = ptrObject;
+			m_ptrTail = ptrObject;
+		}
+		else
+		{
+			ptrObject->m_ptrNext = m_ptrHead;
+			m_ptrHead->m_ptrPrev = ptrObject;
+			m_ptrHead = ptrObject;
+		}*/
+	}
+
+	m_nUsedCacheCapacity++;
+
+#ifndef __CONCURRENT__
+	//flushItemsToStorage();
+#endif //__CONCURRENT__
+
+	return CacheErrorCode::Success;
+}
+
 
 	template<class Type, typename... ArgsType>
 	CacheErrorCode createObjectOfType(std::optional<ObjectUIDType>& uidObject, ObjectTypePtr& ptrObject, const ArgsType... args)
@@ -993,6 +1123,7 @@ private:
 
 	inline void flushItemsToStorage()
 	{
+		return;
 #ifdef __CONCURRENT__
 		std::vector<std::pair<ObjectUIDType, std::pair<std::optional<ObjectUIDType>, std::shared_ptr<ObjectType>>>> vtObjects;
 
