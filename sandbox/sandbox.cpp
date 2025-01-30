@@ -1346,7 +1346,7 @@ int main(int argc, char* argv[])
     //BPlusStoreType ptrTree(48, 4096 ,512 , 10ULL * 1024 * 1024 * 1024, FILE_STORAGE_PATH);
 
     std::vector< std::variant<std::shared_ptr<DataNodeType>, std::shared_ptr<IndexNodeType>> > _vt;
-    for (size_t _i = 0; _i < 5000000; _i = _i + 2)
+    for (size_t _i = 0; _i < 10000000; _i = _i + 2)
     {
         std::shared_ptr<DataNodeType> _obj1 = std::make_shared<DataNodeType>();
         std::shared_ptr<IndexNodeType> _obj2 = std::make_shared<IndexNodeType>();
@@ -1356,7 +1356,7 @@ int main(int argc, char* argv[])
     }
 
     std::chrono::steady_clock::time_point _b = std::chrono::steady_clock::now();
-    for (size_t _i = 0; _i < 5000000; _i = _i + 2)
+    for (size_t _i = 0; _i < 10000000; _i++)
     {
         if (std::holds_alternative<std::shared_ptr<IndexNodeType>>(_vt[_i]))
         {
@@ -1372,19 +1372,58 @@ int main(int argc, char* argv[])
 
     std::chrono::steady_clock::time_point _e = std::chrono::steady_clock::now();
     std::cout
-        << ">> flush [Time: "
+        << ">> 1 [Time: "
         << std::chrono::duration_cast<std::chrono::microseconds>(_e - _b).count() << "us"
         << ", " << std::chrono::duration_cast<std::chrono::nanoseconds> (_e - _b).count() << "ns]"
         << std::endl;
 
 
+
+    struct exp {
+        uint8_t type;
+        std::shared_ptr< void*> ptr;
+    };
+
+    std::vector< exp > _vt1;
+    for (size_t _i = 0; _i < 10000000; _i = _i + 2)
+    {
+        DataNodeType* _obj1 = new DataNodeType();
+        IndexNodeType* _obj2 = new IndexNodeType();
+
+        exp e1;
+        e1.type = DataNodeType::UID;
+        e1.ptr = std::make_shared<void*>( _obj1);
+
+        exp e2;
+        e2.type = IndexNodeType::UID;
+        e2.ptr = std::make_shared<void*>(_obj2);
+
+        _vt1.push_back(e1);
+        _vt1.push_back(e2);
+    }
+
+    _b = std::chrono::steady_clock::now();
+    for (size_t _i = 0; _i < 10000000; _i++)
+    {
+        if (_vt1[_i].type == IndexNodeType::UID)
+        {
+            IndexNodeType* ptrIndexNode = reinterpret_cast<IndexNodeType*>(*_vt1[_i].ptr);
+        }
+        else //if (std::holds_alternative<std::shared_ptr<DataNodeType>>(ptrCurrentNode->getInnerData()))
+        {
+            DataNodeType* ptrIndexNode = reinterpret_cast<DataNodeType*>(*_vt1[_i].ptr);
+        }
+    }
+
+
+/*
     struct exp {
         uint8_t type;
         void* ptr;
     };
 
     std::vector< exp > _vt1;
-    for (size_t _i = 0; _i < 5000000; _i = _i + 2)
+    for (size_t _i = 0; _i < 10000000; _i = _i + 2)
     {
         DataNodeType* _obj1 = new DataNodeType();
         IndexNodeType* _obj2 = new IndexNodeType();
@@ -1402,10 +1441,11 @@ int main(int argc, char* argv[])
     }
 
     _b = std::chrono::steady_clock::now();
-    for (size_t _i = 0; _i < 5000000; _i = _i + 2)
+    for (size_t _i = 0; _i < 10000000; _i++)
     {
         if (_vt1[_i].type == IndexNodeType::UID)
         {
+		//std::cout << ",";
             IndexNodeType* ptrIndexNode = reinterpret_cast<IndexNodeType*>(_vt1[_i].ptr);
         }
         else //if (std::holds_alternative<std::shared_ptr<DataNodeType>>(ptrCurrentNode->getInnerData()))
@@ -1413,14 +1453,14 @@ int main(int argc, char* argv[])
             DataNodeType* ptrIndexNode = reinterpret_cast<DataNodeType*>(_vt1[_i].ptr);
         }
     }
-
+*/
     _e = std::chrono::steady_clock::now();
     std::cout
-        << ">> flush [Time: "
+        << ">> 2 [Time: "
         << std::chrono::duration_cast<std::chrono::microseconds>(_e - _b).count() << "us"
         << ", " << std::chrono::duration_cast<std::chrono::nanoseconds> (_e - _b).count() << "ns]"
         << std::endl;
-
+return 0;
 
     ptrTree.init<DataNodeType>();
 #else //__TREE_WITH_CACHE__
