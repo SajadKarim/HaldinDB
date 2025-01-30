@@ -1436,7 +1436,7 @@ int main(int argc, char* argv[])
     ptrTree.init<DataNodeType>();
 #endif //__TREE_WITH_CACHE__
 
-    size_t nTotalEntries = 100000;
+    size_t nTotalEntries = 500000;
     std::vector<int> random_numbers(nTotalEntries);//50000000);
     std::iota(random_numbers.begin(), random_numbers.end(), 1); // Fill vector with 1 to 5,000,000
     std::random_device rd; // Obtain a random number from hardware
@@ -1495,6 +1495,8 @@ int main(int argc, char* argv[])
         << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "us"
         << ", " << std::chrono::duration_cast<std::chrono::nanoseconds> (end - begin).count() << "ns]"
         << std::endl;
+
+    char ch = getchar();
 
     for (size_t nCntr = 0; nCntr < nTotalEntries; nCntr++)
     {

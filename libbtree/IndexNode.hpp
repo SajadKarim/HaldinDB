@@ -907,7 +907,7 @@ public:
 
 		size_t nMid = m_vtPivots.size() / 2;
 
-		ptrCache->template createObjectOfType__<SelfType>(uidSibling, ptrSibling,
+		ptrCache->template createObjectOfType<SelfType>(uidSibling, ptrSibling,
 			m_vtPivots.begin() + nMid + 1, m_vtPivots.end(),
 			m_vtChildren.begin() + nMid + 1, m_vtChildren.end());
 			//m_ptChildren.begin() + nMid + 1, m_ptChildren.end());
